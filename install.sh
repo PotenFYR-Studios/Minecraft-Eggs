@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-#  Multi Minecraft — Universal Installation Script
+#  Multi Minecraft - Universal Installation Script
 #
 #  Runs inside the universal image (ghcr.io/potenfyr-studios/minecraft-eggs)
 #  as root, with the server files mounted at /mnt/server.
@@ -38,6 +38,7 @@ DEBUG="${DEBUG:-0}"
 [ "${DEBUG}" = "1" ] && set -x
 
 log()  { echo -e "\033[1m\033[33m[install]\033[0m $*"; }
+ok()   { echo -e "\033[1m\033[32m[install][OK]\033[0m $*"; }
 warn() { echo -e "\033[1m\033[33m[install][warn]\033[0m $*"; }
 fail() { echo -e "\033[1m\033[31m[install][ERROR]\033[0m $*"; exit 1; }
 
@@ -165,9 +166,9 @@ install_extra_urls() {
                 url="${entry#*|}"
                 ;;
         esac
-        # dest is a directory: strip slashes and validate
+        # dest is a directory: strip slashes and validate (no path traversal)
         dest=$(echo "${dest}" | sed 's:/*$::')
-        if [ -n "${dest}" ] && ! echo "${dest}" | grep -qE '^[A-Za-z0-9_./-]+$'; then
+        if [ -n "${dest}" ] && { ! echo "${dest}" | grep -qE '^[A-Za-z0-9_./-]+$' || echo "${dest}" | grep -q '\.\.'; }; then
             warn "Skipping EXTRA_URLS entry with unsafe destination '${dest}'"
             continue
         fi
@@ -405,7 +406,7 @@ install_spigot() {
     mv "${built}" "/mnt/server/${JARFILE}"
     cd /mnt/server || exit 1
     rm -rf /tmp/buildtools /tmp/jdk
-    log "Spigot build complete"
+    ok "Spigot build complete"
 }
 
 install_forge() {
@@ -428,7 +429,7 @@ install_forge() {
         mv "${built}" "${JARFILE}"
     fi
     ensure_server_properties
-    log "Forge install complete"
+    ok "Forge install complete"
 }
 
 # Resolves a full Forge maven version (e.g. "1.20.1-47.4.23" or
@@ -490,7 +491,7 @@ install_neoforge() {
     rm -f neoforge-installer.jar
     ln -sf libraries/net/neoforged/${group}/*/unix_args.txt unix_args.txt 2>/dev/null || true
     ensure_server_properties
-    log "NeoForge install complete"
+    ok "NeoForge install complete"
 }
 
 install_fabric() {
@@ -507,7 +508,7 @@ install_fabric() {
     mv -f fabric-server-launch.jar "${JARFILE}"
     RESOLVED_VERSION="${mc}"
     ensure_server_properties
-    log "Fabric install complete"
+    ok "Fabric install complete"
 }
 
 install_quilt() {
@@ -528,7 +529,7 @@ install_quilt() {
     mv -f quilt-server-launch.jar "${JARFILE}"
     RESOLVED_VERSION="${mc}"
     ensure_server_properties
-    log "Quilt install complete"
+    ok "Quilt install complete"
 }
 
 install_mohist() {
@@ -569,7 +570,7 @@ install_bungeecord() {
     download "https://ci.md-5.net/job/BungeeCord/lastSuccessfulBuild/artifact/bootstrap/target/BungeeCord.jar" "${JARFILE}"
     RESOLVED_VERSION="latest"
     ensure_config_yml
-    log "BungeeCord install complete"
+    ok "BungeeCord install complete"
 }
 
 install_waterfall() {
@@ -608,7 +609,7 @@ install_bedrock() {
     chmod +x bedrock_server
     RESOLVED_VERSION=$(echo "${url}" | grep -oP 'bedrock-server-\K[0-9.]+(?=\.zip)' || echo "unknown")
     ensure_server_properties
-    log "Bedrock install complete"
+    ok "Bedrock install complete"
 }
 
 install_nukkit() {
@@ -616,7 +617,7 @@ install_nukkit() {
     download "https://ci.opencollab.dev/job/NukkitX/job/Nukkit/job/master/lastSuccessfulBuild/artifact/target/nukkit-1.0-SNAPSHOT.jar" "${JARFILE}"
     RESOLVED_VERSION="latest"
     ensure_server_properties
-    log "Nukkit install complete"
+    ok "Nukkit install complete"
 }
 
 install_pocketmine() {
@@ -624,7 +625,7 @@ install_pocketmine() {
     download "https://github.com/pmmp/PocketMine-MP/releases/latest/download/PocketMine-MP.phar" "PocketMine-MP.phar"
     RESOLVED_VERSION="latest"
     ensure_server_properties
-    log "PocketMine-MP install complete"
+    ok "PocketMine-MP install complete"
 }
 
 install_github() {
@@ -665,7 +666,7 @@ install_github() {
             download "${url}" "${JARFILE}"
             ;;
     esac
-    log "GitHub install complete"
+    ok "GitHub install complete"
 }
 
 # ---------------------------------------------------------------------------
@@ -775,14 +776,14 @@ install_extra_urls
 install_world
 
 echo "-----------------------------------------"
-echo "Installation completed successfully"
+echo -e "\033[1m\033[32mInstallation completed successfully\033[0m"
 echo "-----------------------------------------"
-echo "  Server type : ${PROJECT_TYPE}"
-[ -n "${RESOLVED_VERSION}" ] && echo "  Version     : ${RESOLVED_VERSION}"
-echo "  Java        : $(java_for_mc "${MC_VERSION}") (auto-selected at runtime)"
-echo "  Jar file    : ${JARFILE}"
+echo -e "\033[36m  Server type :\033[0m ${PROJECT_TYPE}"
+[ -n "${RESOLVED_VERSION}" ] && echo -e "\033[36m  Version     :\033[0m ${RESOLVED_VERSION}"
+echo -e "\033[36m  Java        :\033[0m $(java_for_mc "${MC_VERSION}") (auto-selected at runtime)"
+echo -e "\033[36m  Jar file    :\033[0m ${JARFILE}"
 echo "-----------------------------------------"
-echo "Next steps:"
+echo -e "\033[1m\033[33mNext steps:\033[0m"
 echo "  1. Start the server in the panel and accept the EULA when prompted."
 echo "  2. Players connect to: ${SERVER_IP:-<node IP>}:${SERVER_PORT:-25565}"
 echo "  3. Change settings in the panel (Variables) and press Reinstall to update."
