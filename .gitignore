@@ -1,0 +1,14 @@
+.multi-mc.conf
+*.old
+*.log
+*.zip
+*.jar
+*.phar
+world/
+libraries/
+logs/
+server.properties
+config.yml
+velocity.toml
+unix_args.txt
+eula.txt

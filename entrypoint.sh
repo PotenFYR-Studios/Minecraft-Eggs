@@ -28,6 +28,20 @@ C_RED='\033[31m'
 C_MAGENTA='\033[35m'
 C_DIM='\033[2m'
 
+# Shift out redundant container entrypoint invocations from Docker CMD
+if [ $# -gt 0 ]; then
+    case "$1" in
+        /entrypoint.sh | /usr/local/bin/entrypoint.sh | entrypoint.sh)
+            shift
+            ;;
+        /bin/bash | /usr/bin/bash | bash | /bin/sh | sh)
+            if [ "${2:-}" = "/entrypoint.sh" ] || [ "${2:-}" = "/usr/local/bin/entrypoint.sh" ] || [ "${2:-}" = "entrypoint.sh" ]; then
+                shift 2
+            fi
+            ;;
+    esac
+fi
+
 PANEL_NAME="${PANEL_NAME:-${P_SERVER_UUID:+pterodactyl}}"
 PANEL_NAME="${PANEL_NAME:-panel}"
 
@@ -321,17 +335,24 @@ printf "     and install from any GitHub release with SERVER_TYPE=github.${C_RES
 # ---------------------------------------------------------------------------
 # Startup command evaluation (yolks-compatible)
 # ---------------------------------------------------------------------------
+CMD_TO_RUN="${STARTUP:-}"
+if [ -z "${CMD_TO_RUN}" ] && [ $# -gt 0 ]; then
+    CMD_TO_RUN="$*"
+fi
+
 # Convert all of the "{{VARIABLE}}" parts of the command into the expected
 # shell variable format of "${VARIABLE}" before evaluating the string.
-PARSED=$(printf '%s' "${STARTUP:-}" | sed -e 's/{{/${/g' -e 's/}}/}/g' | sed 's/"/\\"/g')
+PARSED=$(printf '%s' "${CMD_TO_RUN:-bash run.sh}" | sed -e 's/{{/${/g' -e 's/}}/}/g' | sed 's/"/\\"/g')
 eval "PARSED=\"${PARSED}\""
 
 # Fallback / normalization for run.sh execution across panels
-if [ -z "${PARSED}" ] || [ "${PARSED}" = "bash run.sh" ] || [ "${PARSED}" = "run.sh" ] || [ "${PARSED}" = "./run.sh" ]; then
+if [ -z "${PARSED}" ] || [ "${PARSED}" = "bash run.sh" ] || [ "${PARSED}" = "run.sh" ] || [ "${PARSED}" = "./run.sh" ] || [ "${PARSED}" = "bash ./run.sh" ]; then
     if [ -f ./run.sh ]; then
         PARSED="bash ./run.sh"
     elif [ -x /usr/local/bin/run.sh ]; then
         PARSED="/usr/local/bin/run.sh"
+    elif [ -x /run.sh ]; then
+        PARSED="/run.sh"
     else
         PARSED="bash run.sh"
     fi

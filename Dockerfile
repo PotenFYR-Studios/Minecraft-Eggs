@@ -91,14 +91,24 @@ RUN if [ "${JAVA_VERSION}" = "all" ] || [ "${JAVA_VERSION}" = "26" ]; then \
 
 RUN rm -f /tmp/ptero-arch && mkdir -p /opt/java && chmod -R 777 /opt/java
 
+# Create container user (required by Pterodactyl, Wings, Pelican, Feather Panel)
+RUN useradd -d /home/container -m -s /bin/bash container \
+    && mkdir -p /home/container \
+    && chown -R container:container /home/container \
+    && chmod -R 777 /home/container
+
+COPY install.sh /install.sh
+COPY install.sh /usr/local/bin/install.sh
+COPY entrypoint.sh /entrypoint.sh
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY run.sh /run.sh
 COPY run.sh /usr/local/bin/run.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/run.sh /usr/local/bin/install-java.sh
+RUN chmod +x /entrypoint.sh /usr/local/bin/entrypoint.sh /run.sh /usr/local/bin/run.sh /install.sh /usr/local/bin/install.sh /usr/local/bin/install-java.sh
 
+USER container
+ENV USER=container HOME=/home/container
 WORKDIR /home/container
+STOPSIGNAL SIGINT
 
-# Pterodactyl Wings starts the container without overriding CMD/ENTRYPOINT and
-# injects the egg's startup command through the STARTUP environment variable
-# (see entrypoint.sh for the exact contract).
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD []
+CMD ["/bin/bash", "/entrypoint.sh"]
