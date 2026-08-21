@@ -1,11 +1,11 @@
 # =============================================================================
 #  Multi Minecraft - Universal runtime image
 #
-#  Default (JAVA_VERSION=all): ships Java 8, 11, 16, 17, 21 and 25 side by
+#  Default (JAVA_VERSION=all): ships Java 8, 11, 17, 21 and 25 side by
 #  side so ONE image can run every Minecraft server ever released. The
 #  entrypoint auto-selects the correct JVM per server type / version.
 #
-#  Slim variants: build with --build-arg JAVA_VERSION=8|11|16|17|21|25 to get
+#  Slim variants: build with --build-arg JAVA_VERSION=8|11|17|21|25 to get
 #  a single-JVM image for maximum lightness.
 #
 #  The image intentionally contains ONLY the JRE (servers never need a JDK at
@@ -67,12 +67,8 @@ RUN if [ "${JAVA_VERSION}" = "all" ] || [ "${JAVA_VERSION}" = "11" ]; then \
         install-java.sh 11 "$(cat /tmp/ptero-arch)"; \
     fi
 
-# Java 16 - the original requirement for Minecraft 1.17.
-RUN if [ "${JAVA_VERSION}" = "all" ] || [ "${JAVA_VERSION}" = "16" ]; then \
-        install-java.sh 16 "$(cat /tmp/ptero-arch)"; \
-    fi
-
-# Java 17 - Minecraft 1.18 through 1.20.4.
+# Java 17 - Minecraft 1.17 through 1.20.4 (16 was skipped: no JRE exists and
+# 1.17 runs perfectly on 17).
 RUN if [ "${JAVA_VERSION}" = "all" ] || [ "${JAVA_VERSION}" = "17" ]; then \
         install-java.sh 17 "$(cat /tmp/ptero-arch)"; \
     fi
