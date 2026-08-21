@@ -72,11 +72,16 @@ write_conf() { # key value : upsert a KEY=VALUE line (no shell evaluation on rea
     chmod 600 "${CONF_FILE}" 2>/dev/null || true
 }
 
-prompt_value() { # question default : ask on the console, fall back to default
+prompt_value() { # question default : ask on the console if interactive, fall back to default
     local q="$1" def="$2" ans
+    if [ ! -t 0 ]; then
+        # Daemon / non-interactive environment: use default immediately
+        printf '%s' "${def}"
+        return 0
+    fi
     # The question goes to stderr so $(...) captures only the answer.
-    printf "${C_CYAN}${C_BOLD}?${C_RESET} %s ${C_DIM}[default: %s, 120s timeout]${C_RESET}: " "${q}" "${def}" >&2
-    if IFS= read -r -t 120 ans; then
+    printf "${C_CYAN}${C_BOLD}?${C_RESET} %s ${C_DIM}[default: %s, 15s timeout]${C_RESET}: " "${q}" "${def}" >&2
+    if IFS= read -r -t 15 ans; then
         ans="${ans:-${def}}"
     else
         printf "${C_DIM}(no input - using default)${C_RESET}\n" >&2
@@ -91,54 +96,25 @@ VALID_TYPES="vanilla paper spigot purpur folia forge neoforge fabric quilt mohis
 is_valid_type() { case " ${VALID_TYPES} " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
 # ---------------------------------------------------------------------------
-# Interactive validation (first run / broken configuration)
+# Validation & defaults (auto-fill empty values)
 # ---------------------------------------------------------------------------
 TYPE=$(echo "${SERVER_TYPE:-vanilla}" | tr '[:upper:]' '[:lower:]')
+[ -z "${TYPE}" ] && TYPE="vanilla"
 
 if ! is_valid_type "${TYPE}"; then
-    warn "Server type '${TYPE}' is not supported by this egg."
-    TYPE=$(prompt_value "Select a server type" "vanilla")
-    if ! is_valid_type "${TYPE}"; then
-        error "Invalid server type '${TYPE}'; falling back to 'vanilla'."
-        TYPE="vanilla"
-    fi
+    warn "Server type '${TYPE}' is not supported by this egg; defaulting to 'vanilla'."
+    TYPE="vanilla"
     write_conf SERVER_TYPE "${TYPE}"
     export SERVER_TYPE="${TYPE}"
-    log "Saved server type '${TYPE}' in ${CONF_FILE} (delete this file to reset)"
 fi
 
-if [ -z "${MINECRAFT_VERSION:-}" ]; then
-    warn "Minecraft version is empty."
-    MINECRAFT_VERSION=$(prompt_value "Minecraft version (e.g. 1.21.4, 26.1, latest)" "latest")
-    write_conf MINECRAFT_VERSION "${MINECRAFT_VERSION}"
-    export MINECRAFT_VERSION="${MINECRAFT_VERSION}"
-    log "Saved Minecraft version '${MINECRAFT_VERSION}' in ${CONF_FILE}"
-fi
+MINECRAFT_VERSION="${MINECRAFT_VERSION:-latest}"
+[ -z "${MINECRAFT_VERSION}" ] && MINECRAFT_VERSION="latest"
 
 if [ "${TYPE}" = "custom" ] && [ -z "${CUSTOM_COMMAND:-}" ]; then
-    warn "Server type is 'custom' but no command was provided."
-    CUSTOM_COMMAND=$(prompt_value "Custom launch command" "java -Xmx1024M -jar server.jar")
+    CUSTOM_COMMAND="java -Xms128M -Xmx${SERVER_MEMORY:-1024}M -jar ${SERVER_JARFILE:-server.jar}"
     write_conf CUSTOM_COMMAND "${CUSTOM_COMMAND}"
     export CUSTOM_COMMAND="${CUSTOM_COMMAND}"
-    log "Saved custom command in ${CONF_FILE}"
-fi
-
-if [ "${TYPE}" = "github" ]; then
-    if [ -z "${GITHUB_REPO:-}" ]; then
-        warn "Server type is 'github' but no repository was provided."
-        GITHUB_REPO=$(prompt_value "GitHub repository (owner/name)" "")
-        if [ -n "${GITHUB_REPO}" ]; then
-            write_conf GITHUB_REPO "${GITHUB_REPO}"
-            export GITHUB_REPO="${GITHUB_REPO}"
-            log "Saved GitHub repository '${GITHUB_REPO}' in ${CONF_FILE}"
-        fi
-    fi
-    if [ -z "${GITHUB_TAG:-}" ]; then
-        GITHUB_TAG=$(prompt_value "GitHub release tag (or 'latest')" "latest")
-        write_conf GITHUB_TAG "${GITHUB_TAG}"
-        export GITHUB_TAG="${GITHUB_TAG}"
-        log "Saved GitHub release tag '${GITHUB_TAG}' in ${CONF_FILE}"
-    fi
 fi
 
 if [ -n "${JAVA_VERSION:-}" ]; then
@@ -166,19 +142,61 @@ SERVER_JARFILE="${SERVER_JARFILE:-${JARFILE:-server.jar}}"
 MEMORY=${SERVER_MEMORY}
 
 # ---------------------------------------------------------------------------
+# Auto-installation if server files are not found
+# ---------------------------------------------------------------------------
+auto_install_if_needed() {
+    local need_install=0
+    case "${TYPE}" in
+        bedrock)
+            [ ! -f ./bedrock_server ] && need_install=1
+            ;;
+        pocketmine)
+            [ ! -f ./PocketMine-MP.phar ] && need_install=1
+            ;;
+        *)
+            if [ ! -f "${SERVER_JARFILE:-server.jar}" ] && [ ! -f unix_args.txt ]; then
+                local cand_jar
+                cand_jar=$(ls *.jar 2>/dev/null | grep -v 'installer' | head -n1)
+                if [ -n "${cand_jar}" ]; then
+                    SERVER_JARFILE="${cand_jar}"
+                else
+                    need_install=1
+                fi
+            fi
+            ;;
+    esac
+
+    if [ "${need_install}" = "1" ]; then
+        log "Server files not found in $(pwd). Running automatic installation for ${TYPE} (${MINECRAFT_VERSION})..."
+        if [ -x /usr/local/bin/install.sh ]; then
+            bash /usr/local/bin/install.sh || warn "Installer exited with code $?"
+        elif [ -f ./install.sh ]; then
+            bash ./install.sh || warn "Installer exited with code $?"
+        elif [ -x /install.sh ]; then
+            bash /install.sh || warn "Installer exited with code $?"
+        elif command -v install.sh >/dev/null 2>&1; then
+            install.sh || warn "Installer exited with code $?"
+        fi
+    fi
+}
+
+auto_install_if_needed
+
+# ---------------------------------------------------------------------------
 # Non-Java server types
 # ---------------------------------------------------------------------------
 case "${TYPE}" in
     bedrock)
-        # Bedrock Dedicated Server ships its own shared libraries.
+        [ ! -f ./bedrock_server ] && { error "bedrock_server executable not found in $(pwd)"; sleep 3; exit 1; }
+        chmod +x ./bedrock_server 2>/dev/null || true
         exec env LD_LIBRARY_PATH=. ./bedrock_server
         ;;
     pocketmine)
-        # PocketMine-MP runs on the PHP runtime shipped inside the image.
+        [ ! -f ./PocketMine-MP.phar ] && { error "PocketMine-MP.phar not found in $(pwd)"; sleep 3; exit 1; }
         exec php ./PocketMine-MP.phar --no-wizard
         ;;
     custom)
-        exec bash -c "${CUSTOM_COMMAND:-java -Xmx1024M -jar server.jar}"
+        exec bash -c "${CUSTOM_COMMAND:-java -Xmx1024M -jar ${SERVER_JARFILE:-server.jar}}"
         ;;
 esac
 
@@ -216,7 +234,7 @@ else
             SERVER_JARFILE="${cand_jar}"
         else
             error "Server jar file '${SERVER_JARFILE:-server.jar}' was not found in $(pwd)!"
-            error "If this is a new server, please run installation in your panel (Settings -> Reinstall Server) or upload your server jar."
+            error "Please check server settings or trigger Reinstall Server in your panel."
             sleep 3
             exit 1
         fi
