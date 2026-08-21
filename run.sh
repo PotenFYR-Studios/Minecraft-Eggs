@@ -133,9 +133,11 @@ if [ "${TYPE}" = "github" ]; then
     fi
 fi
 
-if [ -n "${JAVA_VERSION:-}" ] && ! echo "${JAVA_VERSION}" | grep -qE '^[0-9]+(-[A-Za-z0-9._-]+)?$'; then
-    warn "JAVA_VERSION '${JAVA_VERSION}' has an invalid format; using auto-detection."
-    unset JAVA_VERSION
+if [ -n "${JAVA_VERSION:-}" ]; then
+    if ! echo "${JAVA_VERSION}" | grep -qE '^(https?://[A-Za-z0-9._~:/?#\[\]@!$&'\''()*+,;=%-]+|[A-Za-z0-9_.-]+)$'; then
+        warn "JAVA_VERSION '${JAVA_VERSION}' has an invalid format; using auto-detection."
+        unset JAVA_VERSION
+    fi
 fi
 
 if [ "${DEBUG:-0}" = "1" ]; then

@@ -84,9 +84,10 @@ fi
 # ---------------------------------------------------------------------------
 # Java runtime auto-selection
 # ---------------------------------------------------------------------------
-detect_java() {
-    local type="${SERVER_TYPE:-}"
-    local mc="${MINECRAFT_VERSION:-}"
+# Selects the best Java runtime home directory for the server.
+detect_java_home() {
+    local type="${SERVER_TYPE:-vanilla}"
+    local mc="${MINECRAFT_VERSION:-latest}"
     local v=""
 
     type="${type,,}"
@@ -99,27 +100,87 @@ detect_java() {
             ;;
     esac
 
-    # Explicit override always wins (egg variable JAVA_VERSION).
+    # 1. Custom Java direct URL via JAVA_URL environment variable
+    if [ -n "${JAVA_URL:-}" ]; then
+        log "Custom Java URL specified (${JAVA_URL}); downloading runtime..."
+        install-java.sh "${JAVA_URL}" "custom" >&2 || true
+        for cand in "/opt/java/custom" "${HOME}/.java/custom" "/home/container/.java/custom"; do
+            if [ -x "${cand}/bin/java" ]; then
+                echo "${cand}"
+                return
+            fi
+        done
+    fi
+
+    # 2. Custom Java via JAVA_VERSION (URL, vendor, local keyword, or explicit version)
     if [ -n "${JAVA_VERSION:-}" ]; then
-        if [ ! -d "/opt/java/${JAVA_VERSION}" ] && command -v install-java.sh >/dev/null 2>&1; then
-            log "Java ${JAVA_VERSION} requested but not present; downloading runtime on-demand..."
-            install-java.sh "${JAVA_VERSION}" >&2 || true
+        # Direct URL in JAVA_VERSION
+        if [[ "${JAVA_VERSION}" =~ ^https?:// ]]; then
+            log "Custom Java URL provided in JAVA_VERSION; downloading..."
+            install-java.sh "${JAVA_VERSION}" "custom" >&2 || true
+            for cand in "/opt/java/custom" "${HOME}/.java/custom" "/home/container/.java/custom"; do
+                if [ -x "${cand}/bin/java" ]; then
+                    echo "${cand}"
+                    return
+                fi
+            done
         fi
-        if [ -d "/opt/java/${JAVA_VERSION}" ]; then
-            echo "${JAVA_VERSION}"
-            return
+
+        # Local directory check if requested (custom, local, or directory name)
+        case "${JAVA_VERSION}" in
+            custom | local | self | manual)
+                for cand in "./java" "./jre" "./jdk" "/home/container/java" "/home/container/jre" "/home/container/jdk" "/opt/java/custom" "${HOME}/.java/custom"; do
+                    if [ -x "${cand}/bin/java" ]; then
+                        echo "${cand}"
+                        return
+                    fi
+                done
+                ;;
+        esac
+
+        # Check pre-installed path
+        for cand in "/opt/java/${JAVA_VERSION}" "${HOME}/.java/${JAVA_VERSION}" "/home/container/.java/${JAVA_VERSION}"; do
+            if [ -x "${cand}/bin/java" ]; then
+                echo "${cand}"
+                return
+            fi
+        done
+
+        # If not present, download on-demand (e.g. graalvm-21, corretto-21, 27, 28, 16)
+        if command -v install-java.sh >/dev/null 2>&1; then
+            log "Java runtime '${JAVA_VERSION}' requested but not present; downloading..."
+            install-java.sh "${JAVA_VERSION}" >&2 || true
+            for cand in "/opt/java/${JAVA_VERSION}" "${HOME}/.java/${JAVA_VERSION}" "/home/container/.java/${JAVA_VERSION}"; do
+                if [ -x "${cand}/bin/java" ]; then
+                    echo "${cand}"
+                    return
+                fi
+            done
         fi
     fi
 
-    # Proxies / standalone Java applications use their own versioning scheme.
+    # 3. Check for local custom JVM bundled in the server directory
+    for cand in "./java" "./jre" "./jdk" "/home/container/java" "/home/container/jre" "/home/container/jdk"; do
+        if [ -x "${cand}/bin/java" ]; then
+            log "Detected local custom Java runtime at ${cand}"
+            echo "${cand}"
+            return
+        fi
+    done
+
+    # 4. Proxies / standalone Java applications use their own versioning scheme.
     case "${type}" in
         velocity | waterfall | bungeecord | nukkit | sponge* | glowstone | cuberite)
-            echo "21"
-            return
+            for cand in "/opt/java/21" "${HOME}/.java/21"; do
+                if [ -x "${cand}/bin/java" ]; then
+                    echo "${cand}"
+                    return
+                fi
+            done
             ;;
     esac
 
-    # Map Minecraft versions to their required Java generation:
+    # 5. Map Minecraft versions to their required Java generation:
     #   Future 27.x+     -> Java 27+
     #   26.x / 26w*      -> Java 26
     #   20.x - 25.x      -> Java 25
@@ -165,34 +226,48 @@ detect_java() {
             ;;
     esac
 
-    # Check if target runtime is installed; if not, attempt on-demand installation
-    if [ -d "/opt/java/${v}" ]; then
-        echo "${v}"
-    else
-        if command -v install-java.sh >/dev/null 2>&1; then
-            install-java.sh "${v}" >&2 2>/dev/null || true
-            if [ -d "/opt/java/${v}" ]; then
-                echo "${v}"
-                return
-            fi
+    # Check if target runtime is installed
+    for cand in "/opt/java/${v}" "${HOME}/.java/${v}"; do
+        if [ -x "${cand}/bin/java" ]; then
+            echo "${cand}"
+            return
         fi
+    done
 
-        # Fall back to newest runtime installed in /opt/java
-        local cand
-        for cand in $(find /opt/java -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort -V -r); do
-            if [ -x "/opt/java/${cand}/bin/java" ]; then
+    # Attempt on-demand download
+    if command -v install-java.sh >/dev/null 2>&1; then
+        install-java.sh "${v}" >&2 2>/dev/null || true
+        for cand in "/opt/java/${v}" "${HOME}/.java/${v}"; do
+            if [ -x "${cand}/bin/java" ]; then
                 echo "${cand}"
                 return
             fi
         done
-        echo ""
     fi
+
+    # Fall back to newest runtime installed in /opt/java or ~/.java
+    local dir
+    for dir in "/opt/java" "${HOME}/.java"; do
+        if [ -d "${dir}" ]; then
+            for cand in $(find "${dir}" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort -V -r); do
+                if [ -x "${dir}/${cand}/bin/java" ]; then
+                    echo "${dir}/${cand}"
+                    return
+                fi
+            done
+        fi
+    done
+
+    echo ""
 }
 
-JAVA_SELECTED="$(detect_java)"
-if [ -n "${JAVA_SELECTED}" ]; then
-    export JAVA_HOME="/opt/java/${JAVA_SELECTED}"
-    export PATH="/opt/java/${JAVA_SELECTED}/bin:${PATH}"
+RESOLVED_JAVA_HOME="$(detect_java_home)"
+if [ -n "${RESOLVED_JAVA_HOME}" ] && [ -x "${RESOLVED_JAVA_HOME}/bin/java" ]; then
+    export JAVA_HOME="${RESOLVED_JAVA_HOME}"
+    export PATH="${JAVA_HOME}/bin:${PATH}"
+    JAVA_SELECTED="$(basename "${JAVA_HOME}")"
+else
+    JAVA_SELECTED=""
 fi
 
 # ---------------------------------------------------------------------------
@@ -207,7 +282,7 @@ printf "${C_CYAN}${C_BOLD}%s${C_RESET}\n" "$(printf '%*s' 176 '' | tr ' ' '=')"
 printf "${C_GREEN}%-22s${C_RESET} %s\n" "Server type:"  "${SERVER_TYPE:-vanilla}"
 printf "${C_GREEN}%-22s${C_RESET} %s\n" "MC version:"   "${MINECRAFT_VERSION:-latest}"
 if [ -n "${JAVA_SELECTED}" ]; then
-    printf "${C_GREEN}%-22s${C_RESET} %s %s\n" "Java:" "${JAVA_SELECTED}" "(auto-selected)"
+    printf "${C_GREEN}%-22s${C_RESET} %s (%s)\n" "Java:" "${JAVA_SELECTED}" "${JAVA_HOME}"
     "${JAVA_HOME}/bin/java" -version 2>&1 | head -n1 | sed 's/^/                      /'
 else
     printf "${C_GREEN}%-22s${C_RESET} %s\n" "Java:" "not required for this server type"
