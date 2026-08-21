@@ -1,0 +1,322 @@
+{
+    "config":  {
+                   "logs":  "{}",
+                   "startup":  "{\"done\":[\"Done (\",\")! For help, type \\\"help\\\"\",\"Listening on\",\"Server started.\",\"Default game type: Survival\"],\"user_interaction\":[],\"strip_ansi\":false}",
+                   "stop":  "stop",
+                   "files":  "{\"server.properties\":{\"parser\":\"properties\",\"find\":{\"query.port\":\"{{server.build.default.port}}\",\"server-ip\":\"0.0.0.0\",\"server-port\":\"{{server.build.default.port}}\"}},\"config.yml\":{\"parser\":\"yaml\",\"find\":{\"listeners[0].host\":\"0.0.0.0:{{server.build.default.port}}\"}},\"velocity.toml\":{\"parser\":\"file\",\"find\":{\"bind = \\\"0.0.0.0:25577\\\"\":\"bind = \\\"0.0.0.0:{{server.build.default.port}}\\\"\"}}}"
+               },
+    "docker_images":  {
+                          "Java 21":  "ghcr.io/potenfyr-studios/minecraft-eggs:java21",
+                          "Java 25":  "ghcr.io/potenfyr-studios/minecraft-eggs:java25",
+                          "Java 8":  "ghcr.io/potenfyr-studios/minecraft-eggs:java8",
+                          "Universal (Auto Java)":  "ghcr.io/potenfyr-studios/minecraft-eggs:latest",
+                          "Java 17":  "ghcr.io/potenfyr-studios/minecraft-eggs:java17"
+                      },
+    "features":  [
+                     "eula",
+                     "java_version",
+                     "pid_limit"
+                 ],
+    "_comment":  "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
+    "file_denylist":  [
+
+                      ],
+    "exported_at":  "2026-08-22T00:00:00+00:00",
+    "scripts":  {
+                    "installation":  {
+                                         "script":  "#!/bin/bash\n# =============================================================================\n#  Multi Minecraft — Universal Installation Script\n#\n#  Runs inside the universal image (ghcr.io/potenfyr-studios/minecraft-eggs)\n#  as root, with the server files mounted at /mnt/server.\n#\n#  Supported server types (SERVER_TYPE):\n#    vanilla | paper | spigot | purpur | folia | forge | neoforge | fabric |\n#    quilt | mohist | magma | bungeecord | velocity | waterfall | bedrock |\n#    nukkit | pocketmine | github | custom\n#\n#  \u0027github\u0027 installs a server jar straight from a GitHub release\n#  (GITHUB_REPO=owner/name, optional GITHUB_TAG and GITHUB_ASSET filter) -\n#  perfect for software that is only published on GitHub.\n#\n#  Every project supports its full version history; unknown versions fall\n#  back to the latest release with a warning. Setting DL_URL bypasses the\n#  project logic entirely (downloads straight into the server jar file).\n#\n#  Behavior switches (egg variables):\n#    AUTO_UPDATE=1 (default)  always (re)install on reinstall\n#    AUTO_UPDATE=0            skip installation if the server files exist\n#    KEEP_BACKUP=1            keep the previous jar as \u003cname\u003e.old\n#    SHOW_VERSIONS=1          print all available versions and exit (no install)\n#    DEBUG=1                  run with bash -x (verbose troubleshooting output)\n#    MOTD / MAX_PLAYERS / ONLINE_MODE / VIEW_DISTANCE / DIFFICULTY / GAMEMODE /\n#    PVP / RCON_PASSWORD      applied to a freshly generated server.properties\n#    EXTRA_URLS               extra files to download (dest/name|url per line)\n#    WORLD_URL                world zip to import into ./world (Java servers)\n# =============================================================================\n\nset -uo pipefail\n\ncd /mnt/server || exit 1\n\nDEBUG=\"${DEBUG:-0}\"\n[ \"${DEBUG}\" = \"1\" ] \u0026\u0026 set -x\n\nlog()  { echo -e \"\\033[1m\\033[33m[install]\\033[0m $*\"; }\nwarn() { echo -e \"\\033[1m\\033[33m[install][warn]\\033[0m $*\"; }\nfail() { echo -e \"\\033[1m\\033[31m[install][ERROR]\\033[0m $*\"; exit 1; }\n\nPROJECT_TYPE=$(echo \"${SERVER_TYPE:-vanilla}\" | tr \u0027[:upper:]\u0027 \u0027[:lower:]\u0027)\nMC_VERSION=\"${MINECRAFT_VERSION:-latest}\"\nBUILD_NUMBER=\"${BUILD_NUMBER:-latest}\"\nLOADER_VERSION=\"${LOADER_VERSION:-latest}\"\nJARFILE=\"${SERVER_JARFILE:-server.jar}\"\nMOTD=\"${MOTD:-A Minecraft Server}\"\nMAX_PLAYERS=\"${MAX_PLAYERS:-20}\"\nONLINE_MODE=\"${ONLINE_MODE:-true}\"\nVIEW_DISTANCE=\"${VIEW_DISTANCE:-10}\"\nDIFFICULTY=\"${DIFFICULTY:-}\"\nGAMEMODE=\"${GAMEMODE:-}\"\nPVP=\"${PVP:-true}\"\nRCON_PASSWORD=\"${RCON_PASSWORD:-}\"\nAUTO_UPDATE=\"${AUTO_UPDATE:-1}\"\nKEEP_BACKUP=\"${KEEP_BACKUP:-0}\"\nGITHUB_REPO=\"${GITHUB_REPO:-}\"\nGITHUB_TAG=\"${GITHUB_TAG:-latest}\"\nGITHUB_ASSET=\"${GITHUB_ASSET:-}\"\nSHOW_VERSIONS=\"${SHOW_VERSIONS:-0}\"\nEXTRA_URLS=\"${EXTRA_URLS:-}\"\nWORLD_URL=\"${WORLD_URL:-}\"\nRESOLVED_VERSION=\"\"\n\nUSER_AGENT=\"MultiMinecraftEgg/1.0 (PotenFYR Studios; https://github.com/PotenFYR-Studios/Minecraft-Eggs)\"\n\n# Backup (or remove) an existing server jar before replacing it.\nbackup_existing_jar() {\n    [ -f \"${JARFILE}\" ] || return 0\n    if [ \"${KEEP_BACKUP}\" = \"1\" ]; then\n        mv -f \"${JARFILE}\" \"${JARFILE}.old\"\n        log \"Previous jar kept as ${JARFILE}.old\"\n    else\n        rm -f \"${JARFILE}\"\n        log \"Removed previous jar (KEEP_BACKUP=0)\"\n    fi\n}\n\ndownload() { # $1 = url, $2 = destination (atomic + cleaned up on failure)\n    if [ \"$2\" = \"${JARFILE}\" ]; then\n        backup_existing_jar\n    fi\n    if ! curl -fsSL --retry 3 --connect-timeout 20 -A \"${USER_AGENT}\" -o \"$2\" \"$1\"; then\n        rm -f \"$2\"\n        fail \"Failed to download $1\"\n    fi\n}\n\n# ---------------------------------------------------------------------------\n# Helpers\n# ---------------------------------------------------------------------------\n\nmc_latest_release() {\n    curl -fsSL -A \"${USER_AGENT}\" https://piston-meta.mojang.com/mc/game/version_manifest_v2.json | jq -r \u0027.latest.release\u0027\n}\n\nmc_latest_snapshot() {\n    curl -fsSL -A \"${USER_AGENT}\" https://piston-meta.mojang.com/mc/game/version_manifest_v2.json | jq -r \u0027.latest.snapshot\u0027\n}\n\n# Java generation required for a given Minecraft version\njava_for_mc() {\n    case \"$1\" in\n        latest | latest-snapshot) echo 25 ;;\n        2[0-9].*)                  echo 25 ;;\n        1.20.[5-9]* | 1.2[1-9]*)  echo 21 ;;\n        1.17* | 1.18* | 1.19* | 1.20*) echo 17 ;;\n        1.1[0-6]* | 1.[0-9]*)     echo 8 ;;\n        *)                        echo 21 ;;\n    esac\n}\n\njava_bin_for_mc() {\n    local jv\n    jv=$(java_for_mc \"$1\")\n    if [ -x \"/opt/java/${jv}/bin/java\" ]; then\n        echo \"/opt/java/${jv}/bin/java\"\n    else\n        echo \"java\"\n    fi\n}\n\nensure_server_properties() {\n    [ -f server.properties ] \u0026\u0026 return 0\n    {\n        printf \u0027server-ip=0.0.0.0\\n\u0027\n        printf \u0027server-port=25565\\n\u0027\n        printf \u0027query.port=25565\\n\u0027\n        printf \u0027motd=%s\\n\u0027 \"${MOTD}\"\n        printf \u0027max-players=%s\\n\u0027 \"${MAX_PLAYERS}\"\n        printf \u0027view-distance=%s\\n\u0027 \"${VIEW_DISTANCE}\"\n        printf \u0027online-mode=%s\\n\u0027 \"${ONLINE_MODE}\"\n        [ -n \"${DIFFICULTY}\" ] \u0026\u0026 printf \u0027difficulty=%s\\n\u0027 \"${DIFFICULTY}\"\n        [ -n \"${GAMEMODE}\" ] \u0026\u0026 printf \u0027gamemode=%s\\n\u0027 \"${GAMEMODE}\"\n        [ -n \"${PVP}\" ] \u0026\u0026 printf \u0027pvp=%s\\n\u0027 \"${PVP}\"\n        if [ -n \"${RCON_PASSWORD}\" ]; then\n            printf \u0027enable-rcon=true\\n\u0027\n            printf \u0027rcon.password=%s\\n\u0027 \"${RCON_PASSWORD}\"\n        else\n            printf \u0027enable-rcon=false\\n\u0027\n        fi\n    } \u003e server.properties\n    log \"Wrote default server.properties (motd=\u0027${MOTD}\u0027, max-players=${MAX_PLAYERS})\"\n}\n\n# ---------------------------------------------------------------------------\n# Extra downloads (EXTRA_URLS / WORLD_URL)\n# ---------------------------------------------------------------------------\n\n# EXTRA_URLS: one entry per line. Each entry is either a plain URL (file lands\n# in the server root) or \"dest/name|url\" (file lands in dest/, e.g. plugins/).\ninstall_extra_urls() {\n    [ -n \"${EXTRA_URLS}\" ] || return 0\n    log \"Downloading extra files from EXTRA_URLS...\"\n    local IFS=$\u0027\\n\u0027 entry dest url name\n    for entry in ${EXTRA_URLS}; do\n        [ -z \"${entry}\" ] \u0026\u0026 continue\n        dest=\"\"\n        url=\"${entry}\"\n        case \"${entry}\" in\n            *\\|*)\n                dest=\"${entry%%|*}\"\n                url=\"${entry#*|}\"\n                ;;\n        esac\n        # dest is a directory: strip slashes and validate\n        dest=$(echo \"${dest}\" | sed \u0027s:/*$::\u0027)\n        if [ -n \"${dest}\" ] \u0026\u0026 ! echo \"${dest}\" | grep -qE \u0027^[A-Za-z0-9_./-]+$\u0027; then\n            warn \"Skipping EXTRA_URLS entry with unsafe destination \u0027${dest}\u0027\"\n            continue\n        fi\n        name=\"${url##*/}\"\n        name=$(echo \"${name}\" | sed \u0027s/[?].*//\u0027)\n        # Sanitize: only safe file names reach the filesystem.\n        if ! echo \"${name}\" | grep -qE \u0027^[A-Za-z0-9._-]+$\u0027; then\n            warn \"Unsafe file name \u0027${name}\u0027 - saving as extra-file\"\n            name=\"extra-file\"\n        fi\n        [ -n \"${dest}\" ] \u0026\u0026 mkdir -p \"${dest}\"\n        if curl -fsSL --retry 2 --connect-timeout 20 -A \"${USER_AGENT}\" -o \"${dest:+${dest}/}${name}\" \"${url}\"; then\n            case \"${name}\" in\n                *.zip)\n                    unzip -o \"${dest:+${dest}/}${name}\" -d \"${dest}\" \u003e /dev/null 2\u003e\u00261\n                    rm -f \"${dest:+${dest}/}${name}\"\n                    log \"Extracted ${dest:+${dest}/}${name}\"\n                    ;;\n                *)\n                    log \"Saved ${dest:+${dest}/}${name}\"\n                    ;;\n            esac\n        else\n            warn \"Failed to download extra URL: ${url}\"\n        fi\n    done\n}\n\n# WORLD_URL: a world zip (e.g. from Planet Minecraft or a previous host) is\n# downloaded and unpacked into ./world. A single top-level folder inside the\n# archive is unwrapped automatically.\ninstall_world() {\n    [ -n \"${WORLD_URL}\" ] || return 0\n    log \"Downloading world from ${WORLD_URL}\"\n    if ! curl -fsSL --retry 3 --connect-timeout 20 -A \"${USER_AGENT}\" -o /tmp/world.zip \"${WORLD_URL}\"; then\n        warn \"Failed to download world archive\"\n        return 0\n    fi\n    mkdir -p world\n    if unzip -o /tmp/world.zip -d world \u003e /dev/null 2\u003e\u00261; then\n        local sub topfiles\n        sub=$(find world -mindepth 1 -maxdepth 1 -type d | head -n1)\n        topfiles=$(find world -mindepth 1 -maxdepth 1 -type f | wc -l)\n        if [ -n \"${sub}\" ] \u0026\u0026 [ \"${topfiles}\" -eq 0 ]; then\n            mv \"${sub}\"/* world/ 2\u003e/dev/null || true\n            mv \"${sub}\"/.[!.]* world/ 2\u003e/dev/null || true\n            rmdir \"${sub}\" 2\u003e/dev/null || true\n            log \"Unwrapped single-folder world archive\"\n        fi\n        log \"World imported into ./world\"\n    else\n        warn \"World archive could not be extracted (is it a valid zip?)\"\n    fi\n    rm -f /tmp/world.zip\n}\n\nensure_config_yml() {\n    [ -f config.yml ] \u0026\u0026 return 0\n    cat \u003e config.yml \u003c\u003c\u0027EOF\u0027\nlisteners:\n- query_port: 25577\n  motd: \u0027\u00261A BungeeCord Server\u0027\n  query_enabled: false\n  ping_passthrough: false\n  priorities:\n  - lobby\n  bind_local_address: true\n  host: 0.0.0.0:25577\n  max_players: 100\n  tab_size: 60\n  force_default_server: false\n  tab_list: GLOBAL_PING\n  default_server: lobby\n  forced_hosts: {}\ngroups: {}\nremote_ping_cache: -1\nplayer_limit: -1\nip_forward: false\ntimeout: 30000\nlog_commands: false\nonline_mode: true\nservers:\n  lobby:\n    address: 127.0.0.1:25565\n    restricted: false\ndisabled_commands: []\nEOF\n    log \"Wrote default config.yml\"\n}\n\nensure_velocity_toml() {\n    [ -f velocity.toml ] \u0026\u0026 return 0\n    cat \u003e velocity.toml \u003c\u003c\u0027EOF\u0027\nbind = \"0.0.0.0:25577\"\nmotd = \"\u00261A Velocity Server\"\nshow-max-players = 500\nonline-mode = true\nplayer-info-forwarding-mode = \"none\"\nforwarding-secret-file = \"forwarding.secret\"\n\n[servers]\nlobby = \"127.0.0.1:25565\"\n\n[forced-hosts]\n\"lobby.example.com\" = \"lobby\"\n\n[advanced]\ncompression-threshold = 256\nlogin-ratelimit = 3000\nconnection-timeout = 5000\nread-timeout = 30000\nhaproxy-protocol = false\ntcp-fast-open = false\nbungee-plugin-message-channel = true\nshow-ping-requests = false\nfailover-on-unexpected-server-disconnect = true\nannounce-proxy-commands = true\n\n[query]\nenabled = false\nport = 25577\n\n[permissions]\ndefault-enabled = []\nEOF\n    log \"Wrote default velocity.toml\"\n}\n\n# ---------------------------------------------------------------------------\n# Installers\n# ---------------------------------------------------------------------------\n\ninstall_vanilla() {\n    local manifest ver entry_url vjson url\n    log \"Installing vanilla Minecraft (${MC_VERSION})\"\n    manifest=$(curl -fsSL -A \"${USER_AGENT}\" https://piston-meta.mojang.com/mc/game/version_manifest_v2.json) \\\n        || fail \"Cannot reach the Mojang version manifest\"\n    case \"${MC_VERSION}\" in\n        latest) ver=$(echo \"${manifest}\" | jq -r \u0027.latest.release\u0027) ;;\n        latest-snapshot) ver=$(echo \"${manifest}\" | jq -r \u0027.latest.snapshot\u0027) ;;\n        *)\n            ver=$(echo \"${manifest}\" | jq -r --arg v \"${MC_VERSION}\" \u0027.versions[] | select(.id == $v) | .id\u0027 | head -n1)\n            [ -z \"${ver}\" ] \u0026\u0026 fail \"Minecraft version \u0027${MC_VERSION}\u0027 does not exist\"\n            ;;\n    esac\n    entry_url=$(echo \"${manifest}\" | jq -r --arg v \"${ver}\" \u0027.versions[] | select(.id == $v) | .url // empty\u0027 | head -n1)\n    [ -z \"${entry_url}\" ] \u0026\u0026 fail \"Mojang has no version entry for ${ver}\"\n    vjson=$(curl -fsSL -A \"${USER_AGENT}\" \"${entry_url}\") || fail \"Cannot fetch version data for ${ver}\"\n    url=$(echo \"${vjson}\" | jq -r \u0027.downloads.server.url // empty\u0027 | head -n1)\n    [ -z \"${url}\" ] \u0026\u0026 fail \"Mojang does not distribute a server jar for ${ver}\"\n    RESOLVED_VERSION=\"${ver}\"\n    log \"Downloading vanilla ${ver} server jar\"\n    download \"${url}\" \"${JARFILE}\"\n}\n\ninstall_papermc() { # $1 = project (paper|folia|velocity|waterfall)\n    local project=\"$1\" data ver builds build url\n    log \"Installing ${project} (${MC_VERSION}${BUILD_NUMBER:+ build ${BUILD_NUMBER}})\"\n    data=$(curl -fsSL -A \"${USER_AGENT}\" \"https://fill.papermc.io/v3/projects/${project}\") \\\n        || fail \"Cannot reach the PaperMC download API\"\n    if [ \"${MC_VERSION}\" = \"latest\" ]; then\n        ver=$(echo \"${data}\" | jq -r \u0027.versions | to_entries[0].key\u0027)\n    else\n        if curl -fsSL -A \"${USER_AGENT}\" \"https://fill.papermc.io/v3/projects/${project}/versions/${MC_VERSION}\" -o /dev/null 2\u003e/dev/null; then\n            ver=\"${MC_VERSION}\"\n        else\n            warn \"Version \u0027${MC_VERSION}\u0027 not found for ${project}, defaulting to latest\"\n            ver=$(echo \"${data}\" | jq -r \u0027.versions | to_entries[0].key\u0027)\n        fi\n    fi\n    builds=$(curl -fsSL -A \"${USER_AGENT}\" \"https://fill.papermc.io/v3/projects/${project}/versions/${ver}\" | jq -r \u0027.builds\u0027)\n    if [ \"${BUILD_NUMBER}\" = \"latest\" ]; then\n        build=$(echo \"${builds}\" | jq -r \u0027.[0]\u0027)\n    elif echo \"${builds}\" | jq -e --arg b \"${BUILD_NUMBER}\" \u0027index($b)\u0027 \u003e /dev/null 2\u003e\u00261; then\n        build=\"${BUILD_NUMBER}\"\n    else\n        warn \"Build ${BUILD_NUMBER} not found for ${project} ${ver}, using latest\"\n        build=$(echo \"${builds}\" | jq -r \u0027.[0]\u0027)\n    fi\n    url=$(curl -fsSL -A \"${USER_AGENT}\" \"https://fill.papermc.io/v3/projects/${project}/versions/${ver}/builds/${build}\" | jq -r \u0027.downloads[\"server:default\"].url\u0027)\n    [ -z \"${url}\" ] || [ \"${url}\" = \"null\" ] \u0026\u0026 fail \"No download found for ${project} ${ver} build ${build}\"\n    RESOLVED_VERSION=\"${ver} (build ${build})\"\n    log \"Downloading ${project} ${ver} build ${build}\"\n    download \"${url}\" \"${JARFILE}\"\n}\n\ninstall_purpur() {\n    local data ver url\n    log \"Installing Purpur (${MC_VERSION}${BUILD_NUMBER:+ build ${BUILD_NUMBER}})\"\n    data=$(curl -fsSL -A \"${USER_AGENT}\" https://api.purpurmc.org/v2/purpur) \\\n        || fail \"Cannot reach the Purpur download API\"\n    if [ \"${MC_VERSION}\" = \"latest\" ]; then\n        ver=$(echo \"${data}\" | jq -r \u0027.versions[-1]\u0027)\n    else\n        ver=$(echo \"${data}\" | jq -r --arg v \"${MC_VERSION}\" \u0027.versions | index($v) as $i | if $i == null then empty else .[$i] end\u0027 | head -n1)\n        [ -z \"${ver}\" ] \u0026\u0026 { warn \"Version \u0027${MC_VERSION}\u0027 not found for Purpur, defaulting to latest\"; ver=$(echo \"${data}\" | jq -r \u0027.versions[-1]\u0027); }\n    fi\n    if [ \"${BUILD_NUMBER}\" = \"latest\" ]; then\n        url=\"https://api.purpurmc.org/v2/purpur/${ver}/latest/download\"\n    else\n        url=\"https://api.purpurmc.org/v2/purpur/${ver}/${BUILD_NUMBER}/download\"\n    fi\n    RESOLVED_VERSION=\"${ver}\"\n    log \"Downloading Purpur ${ver}\"\n    download \"${url}\" \"${JARFILE}\"\n}\n\ninstall_spigot() {\n    local ver=\"${MC_VERSION}\" jv jdk_arch mem built\n    log \"Building Spigot ${ver} with BuildTools (this can take several minutes)\"\n    RESOLVED_VERSION=\"${ver}\"\n    apt-get update -qq \u003e /dev/null 2\u003e\u00261 || true\n    apt-get install -y -qq git \u003e /dev/null 2\u003e\u00261 || fail \"Failed to install git (required by BuildTools)\"\n    jv=$(java_for_mc \"${ver}\")\n    case \"$(uname -m)\" in\n        x86_64) jdk_arch=\"x64\" ;;\n        aarch64) jdk_arch=\"aarch64\" ;;\n        *) fail \"Unsupported architecture for BuildTools\" ;;\n    esac\n    log \"Downloading temporary JDK ${jv} for the build...\"\n    curl -fsSL -A \"${USER_AGENT}\" \"https://api.adoptium.net/v3/binary/latest/${jv}/ga/linux/${jdk_arch}/jdk/hotspot/normal/eclipse\" -o /tmp/jdk.tar.gz \\\n        || fail \"Failed to download JDK ${jv}\"\n    mkdir -p /tmp/jdk \u0026\u0026 tar -xzf /tmp/jdk.tar.gz -C /tmp/jdk --strip-components=1 \u0026\u0026 rm -f /tmp/jdk.tar.gz\n    mkdir -p /tmp/buildtools \u0026\u0026 cd /tmp/buildtools || exit 1\n    download \"https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar\" BuildTools.jar\n    mem=${SERVER_MEMORY:-1024}\n    [ \"${mem}\" -lt 1024 ] 2\u003e/dev/null \u0026\u0026 mem=1024\n    if [ \"${ver}\" = \"latest\" ]; then\n        /tmp/jdk/bin/java -Xms512M -Xmx${mem}M -jar BuildTools.jar || fail \"BuildTools failed (is ${ver} a valid version / is the memory allocation sufficient?)\"\n    else\n        /tmp/jdk/bin/java -Xms512M -Xmx${mem}M -jar BuildTools.jar --rev \"${ver}\" || fail \"BuildTools failed (is ${ver} a valid version / is the memory allocation sufficient?)\"\n    fi\n    built=$(ls spigot-*.jar 2\u003e/dev/null | grep -v BuildTools | head -n1)\n    [ -z \"${built}\" ] \u0026\u0026 fail \"BuildTools finished but no Spigot jar was produced\"\n    mv \"${built}\" \"/mnt/server/${JARFILE}\"\n    cd /mnt/server || exit 1\n    rm -rf /tmp/buildtools /tmp/jdk\n    log \"Spigot build complete\"\n}\n\ninstall_forge() {\n    local mc=\"${MC_VERSION}\" fv loader\n    log \"Installing Forge (${MC_VERSION}${LOADER_VERSION:+ loader ${LOADER_VERSION}})\"\n    loader=\"${LOADER_VERSION}\"\n    fv=$(resolve_forge_version \"${mc}\" \"${loader}\")\n    [ -z \"${fv}\" ] \u0026\u0026 fail \"Could not resolve a Forge version for Minecraft ${mc}\"\n    RESOLVED_VERSION=\"${fv}\"\n    log \"Using Forge ${fv}\"\n    download \"https://maven.minecraftforge.net/net/minecraftforge/forge/${fv}/forge-${fv}-installer.jar\" forge-installer.jar\n    \"$(java_bin_for_mc \"${mc}\")\" -jar forge-installer.jar --installServer || fail \"Forge installer failed\"\n    rm -f forge-installer.jar\n    if [ -f unix_args.txt ] || ls libraries/net/minecraftforge/forge/*/unix_args.txt \u003e /dev/null 2\u003e\u00261; then\n        ln -sf libraries/net/minecraftforge/forge/*/unix_args.txt unix_args.txt 2\u003e/dev/null || true\n    else\n        built=$(ls forge-*.jar 2\u003e/dev/null | grep -v installer | head -n1)\n        [ -z \"${built}\" ] \u0026\u0026 built=$(ls libraries/net/minecraftforge/forge/*/forge-*.jar 2\u003e/dev/null | grep -v installer | head -n1)\n        [ -z \"${built}\" ] \u0026\u0026 fail \"Forge installed but no launcher jar was produced\"\n        mv \"${built}\" \"${JARFILE}\"\n    fi\n    ensure_server_properties\n    log \"Forge install complete\"\n}\n\n# Resolves a full Forge maven version (e.g. \"1.20.1-47.4.23\" or\n# \"1.8.9-11.15.1.2318-1.8.9\") using promotions data and maven metadata.\nresolve_forge_version() {\n    local mc=\"$1\" loader=\"$2\" promos v latest_mc cand\n    promos=$(curl -fsSL -A \"${USER_AGENT}\" https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json) \\\n        || return 1\n    if [ \"${mc}\" = \"latest\" ]; then\n        latest_mc=$(echo \"${promos}\" | jq -r \u0027.promos | keys[] | select(endswith(\"-latest\")) | rtrimstr(\"-latest\")\u0027 | sort -V | tail -n1)\n        [ -z \"${latest_mc}\" ] \u0026\u0026 return 1\n        mc=\"${latest_mc}\"\n        v=$(echo \"${promos}\" | jq -r --arg k \"${mc}\" \u0027.promos[\"\\($k)-latest\"] // empty\u0027)\n    elif [ \"${loader}\" != \"latest\" ] \u0026\u0026 [ -n \"${loader}\" ]; then\n        v=\"${loader}\"\n    else\n        v=$(echo \"${promos}\" | jq -r --arg k \"${mc}\" \u0027.promos[\"\\($k)-latest\"] // .promos[\"\\($k)-recommended\"] // empty\u0027)\n    fi\n    if [ -n \"${v}\" ] \u0026\u0026 [ -n \"${mc}\" ]; then\n        # Modern naming: \"1.20.1-47.4.23\"; legacy (1.7.x/1.8.x): \"1.8.9-11.15.1.2318-1.8.9\"\n        cand=\"${mc}-${v}\"\n        case \"${mc}\" in\n            1.7* | 1.8*) cand=\"${cand}-${mc}\" ;;\n        esac\n        if curl -fsSL -A \"${USER_AGENT}\" -o /dev/null \"https://maven.minecraftforge.net/net/minecraftforge/forge/${cand}/forge-${cand}-installer.jar\"; then\n            echo \"${cand}\"\n            return 0\n        fi\n    fi\n    # Fall back to maven metadata (covers versions missing from promotions)\n    curl -fsSL -A \"${USER_AGENT}\" https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml \\\n        | grep -oP \u0027(?\u003c=\u003cversion\u003e)[^\u003c]+\u0027 | grep \"^${mc}-\" | sort -V | tail -n1\n}\n\ninstall_neoforge() {\n    local mc=\"${MC_VERSION}\" group base fv prefix\n    log \"Installing NeoForge (${MC_VERSION}${LOADER_VERSION:+ loader ${LOADER_VERSION}})\"\n    if [ \"${mc}\" = \"1.20.1\" ]; then\n        group=\"forge\"\n        base=\"https://maven.neoforged.net/releases/net/neoforged/forge\"\n        prefix=\"1.20.1-\"\n    else\n        group=\"neoforge\"\n        base=\"https://maven.neoforged.net/releases/net/neoforged/neoforge\"\n        prefix=$(echo \"${mc}\" | sed -E \u0027s/^1\\.//\u0027)\n    fi\n    if [ \"${mc}\" = \"latest\" ]; then\n        fv=$(curl -fsSL -A \"${USER_AGENT}\" \"${base}/maven-metadata.xml\" | grep -oP \u0027(?\u003c=\u003clatest\u003e)[^\u003c]+\u0027 | head -n1)\n    elif [ \"${LOADER_VERSION}\" != \"latest\" ]; then\n        fv=\"${LOADER_VERSION}\"\n    else\n        fv=$(curl -fsSL -A \"${USER_AGENT}\" \"${base}/maven-metadata.xml\" | grep -oP \u0027(?\u003c=\u003cversion\u003e)[^\u003c]+\u0027 | grep \"^${prefix}[.-]\" | sort -V | tail -n1)\n    fi\n    [ -z \"${fv}\" ] \u0026\u0026 fail \"Could not resolve a NeoForge version for Minecraft ${mc}\"\n    RESOLVED_VERSION=\"${fv}\"\n    log \"Using NeoForge ${fv}\"\n    download \"https://maven.neoforged.net/releases/net/neoforged/${group}/${fv}/${group}-${fv}-installer.jar\" neoforge-installer.jar\n    \"$(java_bin_for_mc \"${mc}\")\" -jar neoforge-installer.jar --installServer || fail \"NeoForge installer failed\"\n    rm -f neoforge-installer.jar\n    ln -sf libraries/net/neoforged/${group}/*/unix_args.txt unix_args.txt 2\u003e/dev/null || true\n    ensure_server_properties\n    log \"NeoForge install complete\"\n}\n\ninstall_fabric() {\n    local mc=\"${MC_VERSION}\" installer_url loader_args=\"\"\n    log \"Installing Fabric (${MC_VERSION}${LOADER_VERSION:+ loader ${LOADER_VERSION}})\"\n    installer_url=$(curl -fsSL -A \"${USER_AGENT}\" https://meta.fabricmc.net/v2/versions/installer | jq -r \u0027.[0].url\u0027)\n    [ -z \"${installer_url}\" ] \u0026\u0026 fail \"Cannot resolve the Fabric installer\"\n    [ \"${mc}\" = \"latest\" ] \u0026\u0026 mc=$(mc_latest_release)\n    if [ \"${LOADER_VERSION}\" != \"latest\" ]; then loader_args=\"-loader ${LOADER_VERSION}\"; fi\n    download \"${installer_url}\" fabric-installer.jar\n    \"$(java_bin_for_mc \"${mc}\")\" -jar fabric-installer.jar server -mcversion \"${mc}\" ${loader_args} -downloadMinecraft \\\n        || fail \"Fabric installer failed\"\n    rm -f fabric-installer.jar\n    mv -f fabric-server-launch.jar \"${JARFILE}\"\n    RESOLVED_VERSION=\"${mc}\"\n    ensure_server_properties\n    log \"Fabric install complete\"\n}\n\ninstall_quilt() {\n    local mc=\"${MC_VERSION}\" installer_url loader=\"\"\n    log \"Installing Quilt (${MC_VERSION}${LOADER_VERSION:+ loader ${LOADER_VERSION}})\"\n    installer_url=$(curl -fsSL -A \"${USER_AGENT}\" https://meta.quiltmc.org/v3/versions/installer | jq -r \u0027.[0].url\u0027)\n    [ -z \"${installer_url}\" ] \u0026\u0026 fail \"Cannot resolve the Quilt installer\"\n    [ \"${mc}\" = \"latest\" ] \u0026\u0026 mc=$(mc_latest_release)\n    if [ \"${LOADER_VERSION}\" != \"latest\" ]; then\n        loader=\"${LOADER_VERSION}\"\n    else\n        loader=$(curl -fsSL -A \"${USER_AGENT}\" \"https://meta.quiltmc.org/v3/versions/loader/${mc}\" | jq -r \u0027.[0].loader.version\u0027)\n    fi\n    download \"${installer_url}\" quilt-installer.jar\n    \"$(java_bin_for_mc \"${mc}\")\" -jar quilt-installer.jar install server \"${mc}\" \"${loader}\" --download-server --install-dir=/mnt/server \\\n        || fail \"Quilt installer failed\"\n    rm -f quilt-installer.jar\n    mv -f quilt-server-launch.jar \"${JARFILE}\"\n    RESOLVED_VERSION=\"${mc}\"\n    ensure_server_properties\n    log \"Quilt install complete\"\n}\n\ninstall_mohist() {\n    local data ver build\n    log \"Installing Mohist (${MC_VERSION}${BUILD_NUMBER:+ build ${BUILD_NUMBER}})\"\n    data=$(curl -fsSL -A \"${USER_AGENT}\" --connect-timeout 30 https://mohistmc.com/api/v2/projects/mohist) \\\n        || fail \"Cannot reach the Mohist API (consider using a DL_URL instead)\"\n    if [ \"${MC_VERSION}\" = \"latest\" ]; then\n        ver=$(echo \"${data}\" | jq -r \u0027.versions[-1]\u0027)\n    else\n        ver=$(echo \"${data}\" | jq -r --arg v \"${MC_VERSION}\" \u0027.versions | index($v) as $i | if $i == null then empty else .[$i] end\u0027 | head -n1)\n        [ -z \"${ver}\" ] \u0026\u0026 { warn \"No Mohist build for ${MC_VERSION}, defaulting to latest\"; ver=$(echo \"${data}\" | jq -r \u0027.versions[-1]\u0027); }\n    fi\n    if [ \"${BUILD_NUMBER}\" = \"latest\" ]; then\n        build=$(curl -fsSL -A \"${USER_AGENT}\" \"https://mohistmc.com/api/v2/projects/mohist/${ver}/builds\" | jq -r \u0027.builds[-1].number\u0027)\n    else\n        build=$(curl -fsSL -A \"${USER_AGENT}\" \"https://mohistmc.com/api/v2/projects/mohist/${ver}/builds\" | jq -r --arg b \"${BUILD_NUMBER}\" \u0027[.builds[].number] | index($b) as $i | if $i == null then empty else .[$i] end\u0027 | head -n1)\n        [ -z \"${build}\" ] \u0026\u0026 { warn \"Build ${BUILD_NUMBER} not found, using latest\"; build=$(curl -fsSL -A \"${USER_AGENT}\" \"https://mohistmc.com/api/v2/projects/mohist/${ver}/builds\" | jq -r \u0027.builds[-1].number\u0027); }\n    fi\n    RESOLVED_VERSION=\"${ver} (build ${build})\"\n    log \"Downloading Mohist ${ver} build ${build}\"\n    download \"https://mohistmc.com/api/v2/projects/mohist/${ver}/builds/${build}/download\" \"${JARFILE}\"\n}\n\ninstall_magma() {\n    local mc=\"${MC_VERSION}\" repo url\n    [ \"${mc}\" = \"latest\" ] \u0026\u0026 mc=\"1.20.1\"\n    repo=\"magmamaintained/Magma-${mc}\"\n    log \"Installing Magma from GitHub releases (${repo})\"\n    url=$(curl -fsSL -A \"${USER_AGENT}\" \"https://api.github.com/repos/${repo}/releases/latest\" | jq -r \u0027.assets[]?.browser_download_url | select(endswith(\".jar\"))\u0027 | head -n1)\n    [ -z \"${url}\" ] \u0026\u0026 fail \"No Magma release found for ${mc} (consider using a DL_URL instead)\"\n    download \"${url}\" \"${JARFILE}\"\n    RESOLVED_VERSION=\"${mc}\"\n}\n\ninstall_bungeecord() {\n    log \"Installing BungeeCord (always latest)\"\n    download \"https://ci.md-5.net/job/BungeeCord/lastSuccessfulBuild/artifact/bootstrap/target/BungeeCord.jar\" \"${JARFILE}\"\n    RESOLVED_VERSION=\"latest\"\n    ensure_config_yml\n    log \"BungeeCord install complete\"\n}\n\ninstall_waterfall() {\n    install_papermc \"waterfall\"\n    ensure_config_yml\n}\n\ninstall_velocity() {\n    install_papermc \"velocity\"\n    ensure_velocity_toml\n}\n\ninstall_bedrock() {\n    local url links\n    log \"Installing Bedrock Dedicated Server (${MC_VERSION})\"\n    if [ \"$(uname -m)\" != \"x86_64\" ]; then\n        warn \"Mojang only publishes the Bedrock server for x86_64; the build may fail on this architecture\"\n    fi\n    if [ \"${MC_VERSION}\" = \"latest\" ]; then\n        links=$(curl -fsSL --connect-timeout 30 \\\n            -A \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36\" \\\n            -H \"Accept-Language: en\" \\\n            https://net-secondary.web.minecraft-services.net/api/v1.0/download/links) \\\n            || fail \"Cannot reach the Bedrock download service\"\n        url=$(echo \"${links}\" | grep -o \u0027https://www.minecraft.net/bedrockdedicatedserver/bin-linux/[^\"]*\u0027 | head -n1)\n        [ -z \"${url}\" ] \u0026\u0026 fail \"Could not resolve the latest Bedrock server download link\"\n    else\n        url=\"https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-${MC_VERSION}.zip\"\n    fi\n    log \"Downloading ${url}\"\n    curl -fsSL --retry 3 \\\n        -A \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36\" \\\n        -o bedrock.zip \"${url}\" || fail \"Failed to download the Bedrock server\"\n    unzip -o bedrock.zip \u003e /dev/null\n    rm -f bedrock.zip\n    chmod +x bedrock_server\n    RESOLVED_VERSION=$(echo \"${url}\" | grep -oP \u0027bedrock-server-\\K[0-9.]+(?=\\.zip)\u0027 || echo \"unknown\")\n    ensure_server_properties\n    log \"Bedrock install complete\"\n}\n\ninstall_nukkit() {\n    log \"Installing Nukkit (always latest)\"\n    download \"https://ci.opencollab.dev/job/NukkitX/job/Nukkit/job/master/lastSuccessfulBuild/artifact/target/nukkit-1.0-SNAPSHOT.jar\" \"${JARFILE}\"\n    RESOLVED_VERSION=\"latest\"\n    ensure_server_properties\n    log \"Nukkit install complete\"\n}\n\ninstall_pocketmine() {\n    log \"Installing PocketMine-MP (always latest)\"\n    download \"https://github.com/pmmp/PocketMine-MP/releases/latest/download/PocketMine-MP.phar\" \"PocketMine-MP.phar\"\n    RESOLVED_VERSION=\"latest\"\n    ensure_server_properties\n    log \"PocketMine-MP install complete\"\n}\n\ninstall_github() {\n    local data url asset_file\n    log \"Installing from GitHub (${GITHUB_REPO}${GITHUB_TAG:+ @ ${GITHUB_TAG}})\"\n    [ -n \"${GITHUB_REPO}\" ] || fail \"GITHUB_REPO must be set for the \u0027github\u0027 server type (format: owner/repository)\"\n    echo \"${GITHUB_REPO}\" | grep -qE \u0027^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$\u0027 \\\n        || fail \"GITHUB_REPO \u0027${GITHUB_REPO}\u0027 is not a valid owner/repository\"\n    if [ \"${GITHUB_TAG}\" = \"latest\" ]; then\n        data=$(curl -fsSL -A \"${USER_AGENT}\" \"https://api.github.com/repos/${GITHUB_REPO}/releases/latest\") \\\n            || fail \"Cannot reach the GitHub API for ${GITHUB_REPO}\"\n    else\n        data=$(curl -fsSL -A \"${USER_AGENT}\" \"https://api.github.com/repos/${GITHUB_REPO}/releases/tags/${GITHUB_TAG}\") \\\n            || fail \"No release with tag \u0027${GITHUB_TAG}\u0027 found for ${GITHUB_REPO}\"\n    fi\n    if [ -n \"${GITHUB_ASSET}\" ]; then\n        url=$(echo \"${data}\" | jq -r --arg a \"${GITHUB_ASSET}\" \u0027.assets[]?.browser_download_url | select(contains($a))\u0027 | head -n1)\n    else\n        url=$(echo \"${data}\" | jq -r \u0027.assets[]?.browser_download_url | select(test(\"\\\\.jar$\"; \"i\"))\u0027 | head -n1)\n        [ -z \"${url}\" ] \u0026\u0026 url=$(echo \"${data}\" | jq -r \u0027.assets[0].browser_download_url // empty\u0027)\n    fi\n    [ -z \"${url}\" ] || [ \"${url}\" = \"null\" ] \u0026\u0026 fail \"No matching release asset found for ${GITHUB_REPO}\"\n    log \"Downloading ${url##*/}\"\n    RESOLVED_VERSION=\"${GITHUB_TAG} (${url##*/})\"\n    asset_file=\"${url##*/}\"\n    case \"${asset_file}\" in\n        *.zip)\n            curl -fsSL --retry 3 --connect-timeout 20 -A \"${USER_AGENT}\" -o asset.zip \"${url}\" || fail \"Failed to download ${url}\"\n            unzip -o asset.zip \u003e /dev/null\n            rm -f asset.zip\n            local jar\n            jar=$(ls *.jar 2\u003e/dev/null | grep -v \"${JARFILE}\" | head -n1)\n            [ -z \"${jar}\" ] \u0026\u0026 fail \"No .jar file found inside the release asset\"\n            backup_existing_jar\n            mv \"${jar}\" \"${JARFILE}\"\n            ;;\n        *)\n            download \"${url}\" \"${JARFILE}\"\n            ;;\n    esac\n    log \"GitHub install complete\"\n}\n\n# ---------------------------------------------------------------------------\n# Version listing (SHOW_VERSIONS=1)\n# ---------------------------------------------------------------------------\nshow_versions() {\n    local data\n    echo \"-----------------------------------------\"\n    echo \"Available versions for ${PROJECT_TYPE}:\"\n    echo \"-----------------------------------------\"\n    case \"${PROJECT_TYPE}\" in\n        vanilla)\n            data=$(curl -fsSL -A \"${USER_AGENT}\" https://piston-meta.mojang.com/mc/game/version_manifest_v2.json)\n            echo \"Latest release: $(echo \"${data}\" | jq -r \u0027.latest.release\u0027)\"\n            echo \"Latest snapshot: $(echo \"${data}\" | jq -r \u0027.latest.snapshot\u0027)\"\n            echo \"Recent releases:\"\n            echo \"${data}\" | jq -r \u0027[.versions[] | select(.type == \"release\") | .id][0:15][]\u0027\n            ;;\n        paper | folia | velocity | waterfall)\n            data=$(curl -fsSL -A \"${USER_AGENT}\" \"https://fill.papermc.io/v3/projects/${PROJECT_TYPE}\")\n            echo \"${data}\" | jq -r \u0027.versions | to_entries[] | \"\\(.key)  (latest build: \\(.value[0]))\"\u0027\n            ;;\n        purpur)\n            data=$(curl -fsSL -A \"${USER_AGENT}\" https://api.purpurmc.org/v2/purpur)\n            echo \"${data}\" | jq -r \u0027.versions | join(\", \")\u0027\n            ;;\n        forge)\n            echo \"${PROJECT_TYPE} versions:\"\n            curl -fsSL -A \"${USER_AGENT}\" https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json \\\n                | jq -r \u0027.promos | keys[] | select(endswith(\"-latest\")) | rtrimstr(\"-latest\")\u0027\n            ;;\n        neoforge)\n            curl -fsSL -A \"${USER_AGENT}\" https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml \\\n                | grep -oP \u0027(?\u003c=\u003cversion\u003e)[^\u003c]+\u0027 | sort -V | tail -n15\n            ;;\n        mohist)\n            data=$(curl -fsSL -A \"${USER_AGENT}\" --connect-timeout 30 https://mohistmc.com/api/v2/projects/mohist 2\u003e/dev/null) \\\n                \u0026\u0026 echo \"${data}\" | jq -r \u0027.versions | join(\", \")\u0027 || echo \"(Mohist API unreachable)\"\n            ;;\n        github)\n            echo \"GitHub releases are listed at https://github.com/${GITHUB_REPO}/releases\"\n            ;;\n        *)\n            echo \"No version listing available for ${PROJECT_TYPE}.\"\n            ;;\n    esac\n    echo \"-----------------------------------------\"\n    exit 0\n}\n\n# ---------------------------------------------------------------------------\n# Main\n# ---------------------------------------------------------------------------\n\n# Version listing mode: show what is available and stop.\nif [ \"${SHOW_VERSIONS}\" = \"1\" ]; then\n    show_versions\nfi\n\n# A custom download URL bypasses all project logic for Java server types.\nif [ -n \"${DL_URL:-}\" ] \u0026\u0026 [ \"${PROJECT_TYPE}\" != \"custom\" ] \\\n    \u0026\u0026 [ \"${PROJECT_TYPE}\" != \"bedrock\" ] \u0026\u0026 [ \"${PROJECT_TYPE}\" != \"pocketmine\" ]; then\n    log \"Using custom download URL (bypassing ${PROJECT_TYPE} project logic)\"\n    download \"${DL_URL}\" \"${JARFILE}\"\n    exit 0\nfi\n\ncase \"${PROJECT_TYPE}\" in\n    vanilla)     install_vanilla ;;\n    paper)       install_papermc \"paper\" ;;\n    folia)       install_papermc \"folia\" ;;\n    purpur)      install_purpur ;;\n    spigot)      install_spigot ;;\n    forge)       install_forge ;;\n    neoforge)    install_neoforge ;;\n    fabric)      install_fabric ;;\n    quilt)       install_quilt ;;\n    mohist)      install_mohist ;;\n    magma)       install_magma ;;\n    bungeecord)  install_bungeecord ;;\n    waterfall)   install_waterfall ;;\n    velocity)    install_velocity ;;\n    bedrock)     install_bedrock ;;\n    nukkit)      install_nukkit ;;\n    pocketmine)  install_pocketmine ;;\n    github)      install_github ;;\n    custom)\n        if [ -n \"${DL_URL:-}\" ]; then\n            log \"Downloading custom jar from DL_URL\"\n            download \"${DL_URL}\" \"${JARFILE}\"\n        else\n            log \"Custom server type: nothing to download (set DL_URL or upload your own files)\"\n        fi\n        ;;\n    *) fail \"Unknown server type: ${PROJECT_TYPE}\" ;;\nesac\n\n# Ensure a server.properties exists for Java servers so the panel can\n# configure the port automatically (proxies/BDS generate their own files).\ncase \"${PROJECT_TYPE}\" in\n    paper|folia|purpur|spigot|forge|neoforge|fabric|quilt|mohist|magma|nukkit|github|custom)\n        ensure_server_properties ;;\nesac\n\n# Extra files (plugins, configs, resource packs, ...) and world import.\ninstall_extra_urls\ninstall_world\n\necho \"-----------------------------------------\"\necho \"Installation completed successfully\"\necho \"-----------------------------------------\"\necho \"  Server type : ${PROJECT_TYPE}\"\n[ -n \"${RESOLVED_VERSION}\" ] \u0026\u0026 echo \"  Version     : ${RESOLVED_VERSION}\"\necho \"  Java        : $(java_for_mc \"${MC_VERSION}\") (auto-selected at runtime)\"\necho \"  Jar file    : ${JARFILE}\"\necho \"-----------------------------------------\"\necho \"Next steps:\"\necho \"  1. Start the server in the panel and accept the EULA when prompted.\"\necho \"  2. Players connect to: ${SERVER_IP:-\u003cnode IP\u003e}:${SERVER_PORT:-25565}\"\necho \"  3. Change settings in the panel (Variables) and press Reinstall to update.\"\necho \"-----------------------------------------\"",
+                                         "entrypoint":  "bash",
+                                         "container":  "ghcr.io/potenfyr-studios/minecraft-eggs:latest"
+                                     }
+                },
+    "name":  "Multi Minecraft",
+    "description":  "One egg to rule them all. Installs, updates and runs every major Minecraft server software - Java Edition and Bedrock - across every version ever released, including future 26.x releases.\n\nSupported server types (SERVER_TYPE):\n- Vanilla, Paper, Spigot, Purpur, Folia (Java 1.7 - 26.x)\n- Forge, NeoForge, Fabric, Quilt (any loader version for any Minecraft version)\n- Mohist, Magma (hybrid Forge+Bukkit servers)\n- BungeeCord, Velocity, Waterfall (proxies)\n- Bedrock Dedicated Server, Nukkit, PocketMine-MP (Bedrock Edition)\n- GitHub (install any server jar published as a GitHub release)\n- Custom (bring your own jar / any download URL)\n\nFeatures:\n- One universal Docker image with Java 8, 11, 16, 17, 21 and 25 auto-selected by the server version (also slim single-Java variants)\n- Automatic \"latest\" resolution with safe fallback for every project\n- Aikar\u0027s tuned G1GC flags as the default JVM args (override with JAVA_FLAGS, or GC_TYPE when cleared)\n- Panel-managed ports for server.properties, BungeeCord/Waterfall config.yml and velocity.toml\n- One stop command (\"stop\") works for every type - proxies included\n- First-run console wizard that saves answers in .multi-mc.conf\n- SHOW_VERSIONS=1 prints every available version of a project\n- EXTRA_URLS downloads plugins/configs, WORLD_URL imports an existing world\n- DEBUG mode for troubleshooting\n\nSource: https://github.com/PotenFYR-Studios/Minecraft-Eggs",
+    "meta":  {
+                 "version":  "PTDL_v2",
+                 "update_url":  "https://raw.githubusercontent.com/PotenFYR-Studios/Minecraft-Eggs/main/egg-minecraft-multi.json"
+             },
+    "author":  "PotenFYR Studios (https://github.com/PotenFYR-Studios/Minecraft-Eggs)",
+    "variables":  [
+                      {
+                          "default_value":  "vanilla",
+                          "user_viewable":  true,
+                          "name":  "Server Type",
+                          "env_variable":  "SERVER_TYPE",
+                          "description":  "The server software to install and run.\n\nSupported: vanilla, paper, spigot, purpur, folia, forge, neoforge, fabric, quilt, mohist, magma, bungeecord, velocity, waterfall, bedrock, nukkit, pocketmine, github (install from a GitHub release), custom.",
+                          "user_editable":  true,
+                          "rules":  "required|string|in:vanilla,paper,spigot,purpur,folia,forge,neoforge,fabric,quilt,mohist,magma,bungeecord,velocity,waterfall,bedrock,nukkit,pocketmine,github,custom",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "latest",
+                          "user_viewable":  true,
+                          "name":  "Minecraft Version",
+                          "env_variable":  "MINECRAFT_VERSION",
+                          "description":  "The version to install, e.g. 1.21.4, 26.1 or \u0027latest\u0027. Also accepts \u0027latest-snapshot\u0027 for vanilla snapshots. For Paper/Purpur/Folia this is the Minecraft version, for Velocity/Waterfall it is the software version (e.g. 4.0.0), for Bedrock it is the bedrock version (e.g. 1.26.44.3). Invalid versions fall back to latest.",
+                          "user_editable":  true,
+                          "rules":  "required|string|max:32",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "latest",
+                          "user_viewable":  true,
+                          "name":  "Build Number",
+                          "env_variable":  "BUILD_NUMBER",
+                          "description":  "Optional build number for Paper, Folia, Purpur, Velocity, Waterfall and Mohist. Leave as \u0027latest\u0027 for the newest build.",
+                          "user_editable":  true,
+                          "rules":  "nullable|string|max:20",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "latest",
+                          "user_viewable":  true,
+                          "name":  "Loader Version",
+                          "env_variable":  "LOADER_VERSION",
+                          "description":  "Optional loader version for Forge, NeoForge, Fabric and Quilt. Leave as \u0027latest\u0027 to use the newest loader for the selected Minecraft version. For NeoForge you can also enter a full NeoForge version (e.g. 21.1.148).",
+                          "user_editable":  true,
+                          "rules":  "nullable|string|max:32",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "",
+                          "user_viewable":  true,
+                          "name":  "GitHub Repository",
+                          "env_variable":  "GITHUB_REPO",
+                          "description":  "Only used when Server Type is \u0027github\u0027. The GitHub repository to download a server jar from, in the format owner/repository (e.g. sandtechnology/MCPE-Nukkit or ViaVersion/ViaVersion).",
+                          "user_editable":  true,
+                          "rules":  "nullable|string|max:100|regex:/^[\\\\w.-]+\\\\/[\\\\w.-]+$/",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "latest",
+                          "user_viewable":  true,
+                          "name":  "GitHub Release Tag",
+                          "env_variable":  "GITHUB_TAG",
+                          "description":  "Only used when Server Type is \u0027github\u0027. The release tag to download (e.g. 1.21.4). Leave as \u0027latest\u0027 for the newest release.",
+                          "user_editable":  true,
+                          "rules":  "nullable|string|max:50",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "",
+                          "user_viewable":  true,
+                          "name":  "GitHub Asset Filter",
+                          "env_variable":  "GITHUB_ASSET",
+                          "description":  "Only used when Server Type is \u0027github\u0027. A substring to select the release asset to download (e.g. \u0027server\u0027). Empty = automatically pick a .jar asset, or the first asset.",
+                          "user_editable":  true,
+                          "rules":  "nullable|string|max:200",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "server.jar",
+                          "user_viewable":  true,
+                          "name":  "Server Jar File",
+                          "env_variable":  "SERVER_JARFILE",
+                          "description":  "The name of the server jar file to run. For Forge/NeoForge 1.17+ the launcher is generated automatically and this is ignored.",
+                          "user_editable":  true,
+                          "rules":  "required|regex:/^([\\w\\d._-]+)(\\.jar)$/",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "",
+                          "user_viewable":  true,
+                          "name":  "Java Version",
+                          "env_variable":  "JAVA_VERSION",
+                          "description":  "Override the auto-detected Java version. Leave empty for automatic selection (26.x-\u003e25, 1.20.5-1.21.x-\u003e21, 1.17-1.20.4-\u003e17, older-\u003e8, proxies-\u003e21).",
+                          "user_editable":  true,
+                          "rules":  "nullable|string|in:8,11,16,17,21,25",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "-XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:G1NewSizePercent=30 -XX:G1MaxNewSizePercent=40 -XX:G1HeapRegionSize=8M -XX:G1ReservePercent=20 -XX:G1HeapWastePercent=5 -XX:G1MixedGCCountTarget=4 -XX:InitiatingHeapOccupancyPercent=15 -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1RSetUpdatingPauseTimePercent=5 -XX:SurvivorRatio=32 -XX:+PerfDisableSharedMem -XX:MaxTenuringThreshold=1",
+                          "user_viewable":  true,
+                          "name":  "Java Flags",
+                          "env_variable":  "JAVA_FLAGS",
+                          "description":  "JVM arguments applied to every Java server. Defaults to Aikar\u0027s performance-tuned G1GC flags (best balance of latency, throughput and memory). Set to empty to let GC_TYPE choose the tuning, or a single space to run without extra flags.",
+                          "user_editable":  true,
+                          "rules":  "nullable|string|max:2048",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "auto",
+                          "user_viewable":  true,
+                          "name":  "Garbage Collector",
+                          "env_variable":  "GC_TYPE",
+                          "description":  "Only used when Java Flags is empty. auto = Aikar G1GC tuning (default), zgc = ZGC (best for 8GB+ memory on Java 21+), parallel = ParallelGC.",
+                          "user_editable":  true,
+                          "rules":  "required|string|in:auto,g1gc,zgc,parallel",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "",
+                          "user_viewable":  true,
+                          "name":  "Extra Server Arguments",
+                          "env_variable":  "EXTRA_ARGS",
+                          "description":  "Extra arguments appended to the server command after the jar, e.g. --nogui. JVM tuning belongs in JAVA_FLAGS instead.",
+                          "user_editable":  true,
+                          "rules":  "nullable|string|max:500",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "A Minecraft Server",
+                          "user_viewable":  true,
+                          "name":  "MOTD",
+                          "env_variable":  "MOTD",
+                          "description":  "Message of the day written into a freshly generated server.properties (Java servers only).",
+                          "user_editable":  true,
+                          "rules":  "nullable|string|max:200",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "20",
+                          "user_viewable":  true,
+                          "name":  "Max Players",
+                          "env_variable":  "MAX_PLAYERS",
+                          "description":  "Maximum players written into a freshly generated server.properties (Java servers only).",
+                          "user_editable":  true,
+                          "rules":  "nullable|integer|min:1|max:2000",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "true",
+                          "user_viewable":  true,
+                          "name":  "Online Mode",
+                          "env_variable":  "ONLINE_MODE",
+                          "description":  "online-mode written into a freshly generated server.properties (Java servers only).",
+                          "user_editable":  true,
+                          "rules":  "nullable|string|in:true,false",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "10",
+                          "user_viewable":  true,
+                          "name":  "View Distance",
+                          "env_variable":  "VIEW_DISTANCE",
+                          "description":  "view-distance written into a freshly generated server.properties (Java servers only).",
+                          "user_editable":  true,
+                          "rules":  "nullable|integer|min:3|max:64",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "",
+                          "user_viewable":  true,
+                          "name":  "Difficulty",
+                          "env_variable":  "DIFFICULTY",
+                          "description":  "difficulty written into a freshly generated server.properties (peaceful/easy/normal/hard). Leave empty to use the server default.",
+                          "user_editable":  true,
+                          "rules":  "nullable|string|in:peaceful,easy,normal,hard",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "",
+                          "user_viewable":  true,
+                          "name":  "Gamemode",
+                          "env_variable":  "GAMEMODE",
+                          "description":  "gamemode written into a freshly generated server.properties (survival/creative/adventure/spectator). Leave empty to use the server default.",
+                          "user_editable":  true,
+                          "rules":  "nullable|string|in:survival,creative,adventure,spectator",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "true",
+                          "user_viewable":  true,
+                          "name":  "PvP",
+                          "env_variable":  "PVP",
+                          "description":  "pvp written into a freshly generated server.properties. Leave empty to use the server default (true).",
+                          "user_editable":  true,
+                          "rules":  "nullable|string|in:true,false",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "",
+                          "user_viewable":  true,
+                          "name":  "RCON Password",
+                          "env_variable":  "RCON_PASSWORD",
+                          "description":  "If set, RCON is enabled with this password in a freshly generated server.properties (admin tools / gamepads). Leave empty to keep RCON disabled. Stored in plain text in server.properties.",
+                          "user_editable":  true,
+                          "rules":  "nullable|string|max:64",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "",
+                          "user_viewable":  false,
+                          "name":  "Extra URLs",
+                          "env_variable":  "EXTRA_URLS",
+                          "description":  "Extra files to download during installation (plugins, configs, resource packs, mod jars). One per line. Use \u0027dest/name|url\u0027 to place a file in a subdirectory, e.g. plugins/ViaVersion.jar|https://.... Not user visible.",
+                          "user_editable":  false,
+                          "rules":  "nullable|string|max:2000",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "",
+                          "user_viewable":  false,
+                          "name":  "World Download URL",
+                          "env_variable":  "WORLD_URL",
+                          "description":  "Optional URL to a world zip that is downloaded and extracted into ./world during installation (e.g. from Planet Minecraft or a previous host). Not user visible.",
+                          "user_editable":  false,
+                          "rules":  "nullable|string|max:500",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "0",
+                          "user_viewable":  false,
+                          "name":  "Debug Mode",
+                          "env_variable":  "DEBUG",
+                          "description":  "Set to 1 to run the install script with bash -x and print a resolved-environment dump at server start (troubleshooting only). Not user visible.",
+                          "user_editable":  false,
+                          "rules":  "required|string|in:0,1",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "1",
+                          "user_viewable":  true,
+                          "name":  "Auto Update",
+                          "env_variable":  "AUTO_UPDATE",
+                          "description":  "1 = always (re)install the selected software on reinstall. 0 = skip installation if the server files already exist.",
+                          "user_editable":  true,
+                          "rules":  "required|string|in:0,1",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "0",
+                          "user_viewable":  true,
+                          "name":  "Keep Backup",
+                          "env_variable":  "KEEP_BACKUP",
+                          "description":  "1 = keep the previous jar as \u003cname\u003e.old when updating. 0 = delete the old jar (saves storage).",
+                          "user_editable":  true,
+                          "rules":  "required|string|in:0,1",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "0",
+                          "user_viewable":  false,
+                          "name":  "Show Versions",
+                          "env_variable":  "SHOW_VERSIONS",
+                          "description":  "Set to 1 and press Reinstall to print every available version of the selected project (no files are changed). Not user visible.",
+                          "user_editable":  false,
+                          "rules":  "required|string|in:0,1",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "",
+                          "user_viewable":  false,
+                          "name":  "Download URL",
+                          "env_variable":  "DL_URL",
+                          "description":  "Optional direct download URL that overrides the project logic for Java server types (jar is saved as the Server Jar File). Not user visible.",
+                          "user_editable":  false,
+                          "rules":  "nullable|string|max:500",
+                          "field_type":  "text"
+                      },
+                      {
+                          "default_value":  "java -Xmx1024M -jar server.jar",
+                          "user_viewable":  true,
+                          "name":  "Custom Command",
+                          "env_variable":  "CUSTOM_COMMAND",
+                          "description":  "Only used when Server Type is \u0027custom\u0027. The exact shell command to launch your server, e.g. java -Xmx1024M -jar server.jar.",
+                          "user_editable":  true,
+                          "rules":  "nullable|string|max:500",
+                          "field_type":  "text"
+                      }
+                  ],
+    "startup":  "bash run.sh"
+}
