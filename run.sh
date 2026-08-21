@@ -39,14 +39,22 @@ C_YELLOW='\033[33m'
 C_RED='\033[31m'
 C_DIM='\033[2m'
 
-log() { printf "${C_YELLOW}${C_BOLD}container@pterodactyl~${C_RESET} ${C_BOLD}%s${C_RESET}\n" "$*"; }
-warn() { printf "${C_YELLOW}${C_BOLD}container@pterodactyl~${C_RESET} ${C_YELLOW}${C_BOLD}[warn]${C_RESET} %s\n" "$*"; }
-error() { printf "${C_YELLOW}${C_BOLD}container@pterodactyl~${C_RESET} ${C_RED}${C_BOLD}[error]${C_RESET} %s\n" "$*"; }
+PANEL_NAME="${PANEL_NAME:-${P_SERVER_UUID:+pterodactyl}}"
+PANEL_NAME="${PANEL_NAME:-panel}"
 
-cd /home/container 2>/dev/null || true
+log() { printf "${C_YELLOW}${C_BOLD}container@${PANEL_NAME}~${C_RESET} ${C_BOLD}%s${C_RESET}\n" "$*"; }
+warn() { printf "${C_YELLOW}${C_BOLD}container@${PANEL_NAME}~${C_RESET} ${C_YELLOW}${C_BOLD}[warn]${C_RESET} %s\n" "$*"; }
+error() { printf "${C_YELLOW}${C_BOLD}container@${PANEL_NAME}~${C_RESET} ${C_RED}${C_BOLD}[error]${C_RESET} %s\n" "$*"; }
+
+if [ -d /home/container ]; then
+    cd /home/container 2>/dev/null || true
+else
+    cd "$(pwd)" 2>/dev/null || true
+fi
+SERVER_DIR="$(pwd)"
 
 # --- Persisted settings ------------------------------------------------------
-CONF_FILE="${CONF_FILE:-/home/container/.multi-mc.conf}"
+CONF_FILE="${CONF_FILE:-${SERVER_DIR}/.multi-mc.conf}"
 
 write_conf() { # key value : upsert a KEY=VALUE line (no shell evaluation on read)
     local key="$1" value="$2" tmp
@@ -151,7 +159,11 @@ if [ -f ./run.custom.sh ]; then
     exec bash ./run.custom.sh
 fi
 
-MEMORY=${SERVER_MEMORY:-1024}
+SERVER_PORT="${SERVER_PORT:-${PORT:-${ALLOCATION_PORT:-${SERVER_PORT_0:-25565}}}}"
+SERVER_MEMORY="${SERVER_MEMORY:-${MEMORY:-${MEM_SIZE:-${P_SERVER_MEMORY:-1024}}}}"
+SERVER_IP="${SERVER_IP:-${IP:-${P_SERVER_IP:-0.0.0.0}}}"
+SERVER_JARFILE="${SERVER_JARFILE:-${JARFILE:-server.jar}}"
+MEMORY=${SERVER_MEMORY}
 
 # ---------------------------------------------------------------------------
 # Non-Java server types
@@ -197,6 +209,18 @@ EXTRA_ARGS="${EXTRA_ARGS:-}"
 if [ -f unix_args.txt ] && { [ "${TYPE}" = "forge" ] || [ "${TYPE}" = "neoforge" ]; }; then
     JAVA_CMD="java -Xms128M -Xmx${MEMORY}M ${JAVA_FLAGS} @unix_args.txt nogui ${EXTRA_ARGS}"
 else
+    if [ ! -f "${SERVER_JARFILE:-server.jar}" ]; then
+        cand_jar=$(ls *.jar 2>/dev/null | grep -v 'installer' | head -n1)
+        if [ -n "${cand_jar}" ]; then
+            warn "Configured jar '${SERVER_JARFILE:-server.jar}' not found, but found '${cand_jar}'. Launching with '${cand_jar}'."
+            SERVER_JARFILE="${cand_jar}"
+        else
+            error "Server jar file '${SERVER_JARFILE:-server.jar}' was not found in $(pwd)!"
+            error "If this is a new server, please run installation in your panel (Settings -> Reinstall Server) or upload your server jar."
+            sleep 3
+            exit 1
+        fi
+    fi
     JAVA_CMD="java -Xms128M -Xmx${MEMORY}M ${JAVA_FLAGS} -jar ${SERVER_JARFILE:-server.jar} ${EXTRA_ARGS}"
 fi
 

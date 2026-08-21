@@ -1,9 +1,18 @@
-# Multi Minecraft - the universal Minecraft egg for Pterodactyl
+# Multi Minecraft - the universal Minecraft egg for Pterodactyl, Pelican, Feather Panel & More
 
-> **One egg. Every Minecraft server. Every version.**
+> **One egg. Every Minecraft server. Every version. Every panel.**
 > Installs, updates and runs **18 different server software families** - Java
-> and Bedrock - across **every version ever released** (1.0 → 26.x), including
-> snapshots, deprecated versions and future releases.
+> and Bedrock - across **every version ever released** (1.0 → 26.x), with full
+> universal compatibility across **Pterodactyl**, **Pelican Panel**, **Feather Panel**,
+> **Wisp**, **Jexactyl**, and other egg-compatible panels.
+
+<p align="center">
+  <a href="https://github.com/PotenFYR-Studios/Minecraft-Eggs/actions"><img src="https://img.shields.io/github/actions/workflow/status/PotenFYR-Studios/Minecraft-Eggs/docker-image.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=Build" alt="Build Status"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-success?style=for-the-badge&logo=opensourceinitiative&logoColor=white" alt="License: MIT"></a>
+  <a href="https://github.com/PotenFYR-Studios/Minecraft-Eggs/pkgs/container/minecraft-eggs"><img src="https://img.shields.io/badge/GHCR-Docker%20Image-blue?style=for-the-badge&logo=docker&logoColor=white" alt="Docker GHCR"></a>
+  <a href="https://github.com/PotenFYR-Studios/Minecraft-Eggs"><img src="https://img.shields.io/badge/Panels-Pterodactyl%20%7C%20Pelican%20%7C%20Feather-9cf?style=for-the-badge&logo=server&logoColor=white" alt="Panels Supported"></a>
+  <a href="https://github.com/PotenFYR-Studios/Minecraft-Eggs"><img src="https://img.shields.io/badge/Java-8%20%7C%2011%20%7C%2017%20%7C%2021%20%7C%2025%20%7C%2026%2B-orange?style=for-the-badge&logo=openjdk&logoColor=white" alt="Java Support"></a>
+</p>
 
 ```
 .        :    ::: :::.    :::. .,::::::     .,-:::::   :::::::..      ::;.      .-:::::' ::::::::::::      .        :     ...    :::  :::      :::::::::::: :::      .,::::::     .,-:::::/     .,-:::::/  
@@ -12,7 +21,7 @@
 $$$$$$$$"$$$  $$$   $$$ "Y$c$$  $$""""    $$$           $$$$$$c     c$$$cc$$$c  `$$$"``       $$           $$$$$$$$"$$$  $$      $$$  $$'           $$      $$$ cccc  $$""""    "$$c.    "$$  "$$c.    "$$ 
 888 Y88" 888o 888   888    Y88  888oo,__  `88bo,__,o,   888b "88bo,  888   888,  888          88,          888 Y88" 888o 88    .d888 o88oo,.__      88,     888       888oo,__   `Y8bo,,,o88o  `Y8bo,,,o88o
 MMM  M'  "MMM MMM   MMM     YM  """"YUMMM   "YUMMMMMP"  MMMM   "W"   YMM   ""`   "MM,         MMM          MMM  M'  "MMM  "YmmMMMM"" """"YUMMM      MMM     MMM       """"YUMMM    `'YMUP"YMM    `'YMUP"YMM
-                                                                                                                                                                                   - By PotenFYR Studios
+                                                                                                                                                      - By PotenFYR Studios
 ```
 
 ---
@@ -33,7 +42,8 @@ MMM  M'  "MMM MMM   MMM     YM  """"YUMMM   "YUMMMMMP"  MMMM   "W"   YMM   ""`  
 12. [Performance & memory](#performance--memory)
 13. [Storage efficiency](#storage-efficiency)
 14. [Troubleshooting](#troubleshooting)
-15. [License](#license)
+15. [Support & Contact](#support--contact)
+16. [License](#license)
 
 ---
 
@@ -41,7 +51,8 @@ MMM  M'  "MMM MMM   MMM     YM  """"YUMMM   "YUMMMMMP"  MMMM   "W"   YMM   ""`  
 
 | Feature | Details |
 |---|---|
-| **Universal** | One egg + one Docker image runs Vanilla, Paper, Spigot, Purpur, Folia, Forge, NeoForge, Fabric, Quilt, Mohist, Magma, BungeeCord, Velocity, Waterfall, Bedrock, Nukkit, PocketMine-MP, GitHub releases and custom jars |
+| **Universal Panel Support** | 100% compatible with **Pterodactyl** (v0.7, v1.x, v2.x), **Pelican Panel**, **Feather Panel**, **Wisp**, **Jexactyl**, **PufferPanel**, and all egg-compatible managers |
+| **All Server Software** | One egg + one Docker image runs Vanilla, Paper, Spigot, Purpur, Folia, Forge, NeoForge, Fabric, Quilt, Mohist, Magma, BungeeCord, Velocity, Waterfall, Bedrock, Nukkit, PocketMine-MP, GitHub releases and custom jars |
 | **Every version** | Full version history per project (Mojang manifest covers 1.0 → 26.x); `latest`, pinned versions, and vanilla `latest-snapshot` |
 | **Auto-Java & Custom JVMs** | The image ships **Java 8, 11, 17, 21, 25 and 26** with dynamic on-demand installation for future (27+), snapshot/EA, beta, alpha, obsolete, and **custom Java runtimes** (GraalVM, Corretto, Zulu, Semeru/OpenJ9, or any direct URL / local `./java` folder) |
 | **Interactive first run** | If a required setting is missing/invalid, the console **asks the user** and saves the answer in `.multi-mc.conf` for every later start |
@@ -485,6 +496,14 @@ self-update. For stability pin exact versions instead.
 | Console prompts on every start | Delete `.multi-mc.conf` in the server files and answer correctly |
 | Want my own flags | Set `JAVA_FLAGS` (wins over `GC_TYPE`); add server args to `EXTRA_ARGS` |
 | Proxy won't stop | It does - `stop` is translated to `end`; make sure you wait a few seconds |
+
+---
+
+## Support & Contact
+
+For questions, bug reports, feature requests, or inquiries, reach out to us at:
+- **Email**: [support@potenfyr.in](mailto:support@potenfyr.in)
+- **GitHub Issues**: [PotenFYR-Studios/Minecraft-Eggs/issues](https://github.com/PotenFYR-Studios/Minecraft-Eggs/issues)
 
 ---
 
