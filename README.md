@@ -43,7 +43,7 @@ MMM  M'  "MMM MMM   MMM     YM  """"YUMMM   "YUMMMMMP"  MMMM   "W"   YMM   ""`  
 |---|---|
 | **Universal** | One egg + one Docker image runs Vanilla, Paper, Spigot, Purpur, Folia, Forge, NeoForge, Fabric, Quilt, Mohist, Magma, BungeeCord, Velocity, Waterfall, Bedrock, Nukkit, PocketMine-MP, GitHub releases and custom jars |
 | **Every version** | Full version history per project (Mojang manifest covers 1.0 → 26.x); `latest`, pinned versions, and vanilla `latest-snapshot` |
-| **Auto-Java** | The image ships **Java 8, 11, 17, 21, 25 and 26** with dynamic on-demand installation for future (27+), snapshot/EA, beta, alpha, and obsolete Java runtimes |
+| **Auto-Java & Custom JVMs** | The image ships **Java 8, 11, 17, 21, 25 and 26** with dynamic on-demand installation for future (27+), snapshot/EA, beta, alpha, obsolete, and **custom Java runtimes** (GraalVM, Corretto, Zulu, Semeru/OpenJ9, or any direct URL / local `./java` folder) |
 | **Interactive first run** | If a required setting is missing/invalid, the console **asks the user** and saves the answer in `.multi-mc.conf` for every later start |
 | **Performance tuned** | Aikar's G1GC flags by default; `GC_TYPE` (auto/g1gc/zgc/parallel) and full `JAVA_FLAGS` override |
 | **One stop command** | `stop` works for every type - proxies (BungeeCord/Waterfall/Velocity) get it translated to `end` automatically |
@@ -233,7 +233,8 @@ All 21 variables. `🔒` = not user-editable (admin-only), `👤` = users can ch
 | `GITHUB_TAG` | `latest` | 👤 | Release tag for GitHub installs |
 | `GITHUB_ASSET` | *(empty)* | 👤 | Asset substring filter (empty = auto-pick a `.jar`) |
 | `SERVER_JARFILE` | `server.jar` | 👤 | Jar name (ignored for Forge/NeoForge 1.17+) |
-| `JAVA_VERSION` | *(empty)* | 👤 | Force a JVM (`8/11/16/17/21/25/26` or any future version like `27`, `28`, `ea`); empty = auto |
+| `JAVA_VERSION` | *(empty)* | 👤 | Force a JVM (`8/11/17/21/25/26`, `graalvm-21`, `corretto-21`, `zulu-17`, `semeru-21`, `custom`, `local`, or direct URL `https://...`); empty = auto |
+| `JAVA_URL` | *(empty)* | 👤 | Direct URL to a custom Java archive (`.tar.gz` or `.zip`) to download and use automatically |
 | `JAVA_FLAGS` | Aikar's tuned G1GC flags | 👤 | JVM arguments - default is the performance-optimized set; clear it to let `GC_TYPE` choose, or set a single space to disable |
 | `GC_TYPE` | `auto` | 👤 | `auto` (Aikar G1GC) / `zgc` / `parallel` - used only when `JAVA_FLAGS` is empty |
 | `EXTRA_ARGS` | *(empty)* | 👤 | Arguments appended **after** the jar, e.g. `--nogui` |
@@ -299,6 +300,20 @@ SERVER_TYPE      = custom
 CUSTOM_COMMAND   = java -Xmx2048M -jar server.jar
 ```
 Upload your jar (or set `DL_URL`) and run whatever you want.
+
+### Use a Custom Java Runtime (GraalVM, Corretto, Zulu, or direct URL)
+You can run your server with any JVM vendor or custom build:
+
+1. **Vendor runtime**:
+   ```
+   JAVA_VERSION = graalvm-21   # or corretto-21, zulu-17, semeru-21, etc.
+   ```
+2. **Direct archive URL** (tar.gz or zip):
+   ```
+   JAVA_URL = https://download.oracle.com/java/21/latest/jdk-21_linux-x64_bin.tar.gz
+   ```
+3. **Local custom runtime**:
+   Place a Java runtime into a `./java` or `./jre` folder in your server files, or set `JAVA_VERSION=custom`.
 
 ### Anything not covered? (ultimate escape hatch)
 Drop a `run.custom.sh` into the server directory - it is executed instead of

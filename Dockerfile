@@ -89,7 +89,7 @@ RUN if [ "${JAVA_VERSION}" = "all" ] || [ "${JAVA_VERSION}" = "26" ]; then \
         install-java.sh 26 "$(cat /tmp/ptero-arch)"; \
     fi
 
-RUN rm -f /tmp/ptero-arch
+RUN rm -f /tmp/ptero-arch && mkdir -p /opt/java && chmod -R 777 /opt/java
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY run.sh /usr/local/bin/run.sh

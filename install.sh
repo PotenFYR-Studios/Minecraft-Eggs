@@ -151,28 +151,67 @@ java_for_mc() {
 }
 
 java_bin_for_mc() {
-    local jv
-    jv=$(java_for_mc "$1")
-    if [ -x "/opt/java/${jv}/bin/java" ]; then
-        echo "/opt/java/${jv}/bin/java"
-        return
+    # 1. Custom Java URL
+    if [ -n "${JAVA_URL:-}" ]; then
+        if command -v install-java.sh >/dev/null 2>&1; then
+            install-java.sh "${JAVA_URL}" "custom" >&2 2>/dev/null || true
+        fi
+        for cand in "/opt/java/custom" "/mnt/server/java" "/mnt/server/jre" "/mnt/server/jdk" "${HOME}/.java/custom"; do
+            if [ -x "${cand}/bin/java" ]; then
+                echo "${cand}/bin/java"
+                return
+            fi
+        done
     fi
 
-    # If missing, attempt on-demand installation via install-java.sh if present
-    if command -v install-java.sh >/dev/null 2>&1; then
-        install-java.sh "${jv}" >&2 2>/dev/null || true
-        if [ -x "/opt/java/${jv}/bin/java" ]; then
-            echo "/opt/java/${jv}/bin/java"
+    # 2. Local custom Java in /mnt/server (the mounted server directory)
+    for cand in "/mnt/server/java" "/mnt/server/jre" "/mnt/server/jdk"; do
+        if [ -x "${cand}/bin/java" ]; then
+            echo "${cand}/bin/java"
+            return
+        fi
+    done
+
+    local jv
+    jv=$(java_for_mc "$1")
+    if [[ "${jv}" =~ ^https?:// ]]; then
+        if command -v install-java.sh >/dev/null 2>&1; then
+            install-java.sh "${jv}" "custom" >&2 2>/dev/null || true
+        fi
+        if [ -x "/opt/java/custom/bin/java" ]; then
+            echo "/opt/java/custom/bin/java"
             return
         fi
     fi
 
-    # Fall back to newest runtime installed in /opt/java
-    local cand
-    for cand in $(find /opt/java -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort -V -r); do
-        if [ -x "/opt/java/${cand}/bin/java" ]; then
-            echo "/opt/java/${cand}/bin/java"
+    for cand in "/opt/java/${jv}" "${HOME}/.java/${jv}"; do
+        if [ -x "${cand}/bin/java" ]; then
+            echo "${cand}/bin/java"
             return
+        fi
+    done
+
+    # If missing, attempt on-demand installation via install-java.sh if present
+    if command -v install-java.sh >/dev/null 2>&1; then
+        install-java.sh "${jv}" >&2 2>/dev/null || true
+        for cand in "/opt/java/${jv}" "${HOME}/.java/${jv}"; do
+            if [ -x "${cand}/bin/java" ]; then
+                echo "${cand}/bin/java"
+                return
+            fi
+        done
+    fi
+
+    # Fall back to newest runtime installed in /opt/java
+    local dir cand
+    for dir in "/opt/java" "${HOME}/.java"; do
+        if [ -d "${dir}" ]; then
+            for cand in $(find "${dir}" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort -V -r); do
+                if [ -x "${dir}/${cand}/bin/java" ]; then
+                    echo "${dir}/${cand}/bin/java"
+                    return
+                fi
+            done
         fi
     done
 
