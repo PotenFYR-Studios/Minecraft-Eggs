@@ -133,8 +133,8 @@ if [ "${TYPE}" = "github" ]; then
     fi
 fi
 
-if [ -n "${JAVA_VERSION:-}" ] && ! echo "${JAVA_VERSION}" | grep -qE '^(8|11|17|21|25)$'; then
-    warn "JAVA_VERSION '${JAVA_VERSION}' is not a supported runtime (8/11/16/17/21/25); using auto-detection."
+if [ -n "${JAVA_VERSION:-}" ] && ! echo "${JAVA_VERSION}" | grep -qE '^[0-9]+(-[A-Za-z0-9._-]+)?$'; then
+    warn "JAVA_VERSION '${JAVA_VERSION}' has an invalid format; using auto-detection."
     unset JAVA_VERSION
 fi
 

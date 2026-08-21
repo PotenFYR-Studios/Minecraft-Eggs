@@ -43,7 +43,7 @@ MMM  M'  "MMM MMM   MMM     YM  """"YUMMM   "YUMMMMMP"  MMMM   "W"   YMM   ""`  
 |---|---|
 | **Universal** | One egg + one Docker image runs Vanilla, Paper, Spigot, Purpur, Folia, Forge, NeoForge, Fabric, Quilt, Mohist, Magma, BungeeCord, Velocity, Waterfall, Bedrock, Nukkit, PocketMine-MP, GitHub releases and custom jars |
 | **Every version** | Full version history per project (Mojang manifest covers 1.0 → 26.x); `latest`, pinned versions, and vanilla `latest-snapshot` |
-| **Auto-Java** | The image ships **Java 8, 11, 16, 17, 21 and 25**. The entrypoint picks the correct JVM per server type + version (26.x→25, 1.20.5-1.21.x→21, 1.17-1.20.4→17, older→8, proxies→21) |
+| **Auto-Java** | The image ships **Java 8, 11, 17, 21, 25 and 26** with dynamic on-demand installation for future (27+), snapshot/EA, beta, alpha, and obsolete Java runtimes |
 | **Interactive first run** | If a required setting is missing/invalid, the console **asks the user** and saves the answer in `.multi-mc.conf` for every later start |
 | **Performance tuned** | Aikar's G1GC flags by default; `GC_TYPE` (auto/g1gc/zgc/parallel) and full `JAVA_FLAGS` override |
 | **One stop command** | `stop` works for every type - proxies (BungeeCord/Waterfall/Velocity) get it translated to `end` automatically |
@@ -145,8 +145,8 @@ The image is built and published by GitHub Actions from this repository:
 
 | Tag | Contents |
 |---|---|
-| `ghcr.io/potenfyr-studios/minecraft-eggs:latest` | **Universal** - Java 8, 11, 16, 17, 21, 25 + PHP 8.1 (PocketMine) + native libs (Bedrock) + jq/curl/unzip/git-ready tools |
-| `...:java25` / `:java21` / `:java17` / `:java16` / `:java11` / `:java8` | **Slim** single-JVM variants (smallest footprint) |
+| `ghcr.io/potenfyr-studios/minecraft-eggs:latest` | **Universal** - Java 8, 11, 17, 21, 25, 26 + dynamic on-demand installer + PHP 8.1 (PocketMine) + native libs (Bedrock) + jq/curl/unzip/git-ready tools |
+| `...:java26` / `:java25` / `:java21` / `:java17` / `:java11` / `:java8` | **Slim** single-JVM variants (smallest footprint) |
 | `...:java<X>-<sha>` | Per-commit builds (rolling) |
 
 Architectures: `linux/amd64` and `linux/arm64`.
@@ -184,7 +184,7 @@ Pterodactyl panel ──► Wings (node)
               └───────────────────────────┘
                           │ 1. entrypoint.sh
                           │    • loads .multi-mc.conf (persisted settings)
-                          │    • auto-selects Java 8/11/16/17/21/25
+                          │    • auto-selects / installs Java (8-26+, snapshots, future)
                           │    • prints banner + runs the STARTUP command
                           ▼
                        run.sh (the launcher)
@@ -233,7 +233,7 @@ All 21 variables. `🔒` = not user-editable (admin-only), `👤` = users can ch
 | `GITHUB_TAG` | `latest` | 👤 | Release tag for GitHub installs |
 | `GITHUB_ASSET` | *(empty)* | 👤 | Asset substring filter (empty = auto-pick a `.jar`) |
 | `SERVER_JARFILE` | `server.jar` | 👤 | Jar name (ignored for Forge/NeoForge 1.17+) |
-| `JAVA_VERSION` | *(empty)* | 👤 | Force a JVM (`8/11/16/17/21/25`); empty = auto |
+| `JAVA_VERSION` | *(empty)* | 👤 | Force a JVM (`8/11/16/17/21/25/26` or any future version like `27`, `28`, `ea`); empty = auto |
 | `JAVA_FLAGS` | Aikar's tuned G1GC flags | 👤 | JVM arguments - default is the performance-optimized set; clear it to let `GC_TYPE` choose, or set a single space to disable |
 | `GC_TYPE` | `auto` | 👤 | `auto` (Aikar G1GC) / `zgc` / `parallel` - used only when `JAVA_FLAGS` is empty |
 | `EXTRA_ARGS` | *(empty)* | 👤 | Arguments appended **after** the jar, e.g. `--nogui` |
@@ -379,7 +379,7 @@ Just press Stop - `stop` is sent and translated to `end` for proxies.
 ### Performance
 - **Default `JAVA_FLAGS` = Aikar's tuned G1GC flags** - the well-known
   performance set (bounded pause targets, fast young-gen, pre-touched heap)
-- Every flag in the default set is compatible with **Java 8 → 25**, so old
+- Every flag in the default set is compatible with **Java 8 → 26+**, so old
   and new servers get the same tuning without risk
 - 8 GB+ RAM: clear `JAVA_FLAGS` and set `GC_TYPE=zgc` (Java 21+) for the
   lowest-latency pauses
@@ -395,7 +395,7 @@ Just press Stop - `stop` is sent and translated to `end` for proxies.
 
 ### Building & hosting the image on GHCR
 The workflow [`.github/workflows/docker-image.yml`](.github/workflows/docker-image.yml):
-- builds a **matrix** (`java8 … java25` + `all`) for `amd64` + `arm64`
+- builds a **matrix** (`java8 … java26` + `all`) for `amd64` + `arm64`
 - pushes `latest`, `java<X>`, and per-commit tags to
   `ghcr.io/potenfyr-studios/minecraft-eggs`
 - runs on push to `main`, on `v*` tags, on PRs (build-only) and manually

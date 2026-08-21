@@ -101,15 +101,52 @@ mc_latest_snapshot() {
     curl -fsSL -A "${USER_AGENT}" https://piston-meta.mojang.com/mc/game/version_manifest_v2.json | jq -r '.latest.snapshot'
 }
 
-# Java generation required for a given Minecraft version
+# Java generation required for a given Minecraft version (supports snapshots, alpha/beta, future)
 java_for_mc() {
+    # If user explicitly set JAVA_VERSION, that takes absolute precedence
+    if [ -n "${JAVA_VERSION:-}" ]; then
+        echo "${JAVA_VERSION}"
+        return
+    fi
     case "$1" in
-        latest | latest-snapshot) echo 25 ;;
-        2[0-9].*)                  echo 25 ;;
-        1.20.[5-9]* | 1.2[1-9]*)  echo 21 ;;
-        1.17* | 1.18* | 1.19* | 1.20*) echo 17 ;;
-        1.1[0-6]* | 1.[0-9]*)     echo 8 ;;
-        *)                        echo 21 ;;
+        latest | latest-snapshot)
+            echo "26"
+            ;;
+        [3-9][0-9].* | 2[7-9].*)
+            # Future Minecraft versions (e.g. 27.x, 28.x)
+            echo "$1" | cut -d. -f1
+            ;;
+        26.*)
+            echo "26"
+            ;;
+        2[0-5].*)
+            echo "25"
+            ;;
+        2[6-9]w* | [3-9][0-9]w*)
+            # Snapshots (e.g. 26w07a, 27w01a)
+            echo "26"
+            ;;
+        25w*)
+            echo "25"
+            ;;
+        24w*)
+            echo "21"
+            ;;
+        20w4[5-9]* | 20w5* | 2[1-3]w*)
+            echo "17"
+            ;;
+        1.20.[5-9]* | 1.2[1-9]*)
+            echo "21"
+            ;;
+        1.17* | 1.18* | 1.19* | 1.20 | 1.20.[1-4]*)
+            echo "17"
+            ;;
+        a1.* | b1.* | c0.* | in-* | rd-* | inf-* | 1.1[0-6]* | 1.[0-9]*)
+            echo "8"
+            ;;
+        *)
+            echo "21"
+            ;;
     esac
 }
 
@@ -118,9 +155,28 @@ java_bin_for_mc() {
     jv=$(java_for_mc "$1")
     if [ -x "/opt/java/${jv}/bin/java" ]; then
         echo "/opt/java/${jv}/bin/java"
-    else
-        echo "java"
+        return
     fi
+
+    # If missing, attempt on-demand installation via install-java.sh if present
+    if command -v install-java.sh >/dev/null 2>&1; then
+        install-java.sh "${jv}" >&2 2>/dev/null || true
+        if [ -x "/opt/java/${jv}/bin/java" ]; then
+            echo "/opt/java/${jv}/bin/java"
+            return
+        fi
+    fi
+
+    # Fall back to newest runtime installed in /opt/java
+    local cand
+    for cand in $(find /opt/java -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort -V -r); do
+        if [ -x "/opt/java/${cand}/bin/java" ]; then
+            echo "/opt/java/${cand}/bin/java"
+            return
+        fi
+    done
+
+    echo "java"
 }
 
 ensure_server_properties() {

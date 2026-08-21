@@ -11,10 +11,10 @@
 #   4. Print a colored summary banner, then evaluate and execute the STARTUP
 #      command provided by the panel (same contract as pterodactyl/yolks).
 #
-# This image ships Java 8, 11, 16, 17, 21 and 25 side by side so a single
-# image can run literally every Minecraft version ever released (1.0 -> 26.x).
-# Slim per-Java variants are published too; on those images the same detection
-# logic simply falls back to whatever JVM is installed.
+# This image ships Java 8, 11, 17, 21, 25 and 26 side by side so a single
+# image can run literally every Minecraft version ever released (Alpha -> 26.x+).
+# Future, snapshot, beta, alpha, and obsolete Java versions are also supported
+# on-demand via dynamic installation. Slim per-Java variants are published too.
 
 set -uo pipefail
 
@@ -100,9 +100,15 @@ detect_java() {
     esac
 
     # Explicit override always wins (egg variable JAVA_VERSION).
-    if [ -n "${JAVA_VERSION:-}" ] && [ -d "/opt/java/${JAVA_VERSION}" ]; then
-        echo "${JAVA_VERSION}"
-        return
+    if [ -n "${JAVA_VERSION:-}" ]; then
+        if [ ! -d "/opt/java/${JAVA_VERSION}" ] && command -v install-java.sh >/dev/null 2>&1; then
+            log "Java ${JAVA_VERSION} requested but not present; downloading runtime on-demand..."
+            install-java.sh "${JAVA_VERSION}" >&2 || true
+        fi
+        if [ -d "/opt/java/${JAVA_VERSION}" ]; then
+            echo "${JAVA_VERSION}"
+            return
+        fi
     fi
 
     # Proxies / standalone Java applications use their own versioning scheme.
@@ -114,24 +120,44 @@ detect_java() {
     esac
 
     # Map Minecraft versions to their required Java generation:
-    #   26.x+            -> Java 25 (first release to require it)
+    #   Future 27.x+     -> Java 27+
+    #   26.x / 26w*      -> Java 26
+    #   20.x - 25.x      -> Java 25
     #   1.20.5 - 1.21.x  -> Java 21
     #   1.17 - 1.20.4    -> Java 17
-    #   anything older   -> Java 8
+    #   anything older   -> Java 8 (including Alpha, Beta, Classic, InDev, Infdev)
     case "${mc}" in
         latest | latest-snapshot)
+            v="26"
+            ;;
+        [3-9][0-9].* | 2[7-9].*)
+            v=$(echo "${mc}" | cut -d. -f1)
+            ;;
+        26.*)
+            v="26"
+            ;;
+        2[0-5].*)
             v="25"
             ;;
-        2[0-9].*)
+        2[6-9]w* | [3-9][0-9]w*)
+            v="26"
+            ;;
+        25w*)
             v="25"
+            ;;
+        24w*)
+            v="21"
+            ;;
+        20w4[5-9]* | 20w5* | 2[1-3]w*)
+            v="17"
             ;;
         1.20.[5-9]* | 1.2[1-9]*)
             v="21"
             ;;
-        1.17* | 1.18* | 1.19* | 1.20*)
+        1.17* | 1.18* | 1.19* | 1.20 | 1.20.[1-4]*)
             v="17"
             ;;
-        1.1[0-6]* | 1.[0-9]*)
+        a1.* | b1.* | c0.* | in-* | rd-* | inf-* | 1.1[0-6]* | 1.[0-9]*)
             v="8"
             ;;
         *)
@@ -139,13 +165,22 @@ detect_java() {
             ;;
     esac
 
-    # If the chosen JVM is missing (e.g. slim image variant), fall back to the
-    # newest runtime that is actually installed.
+    # Check if target runtime is installed; if not, attempt on-demand installation
     if [ -d "/opt/java/${v}" ]; then
         echo "${v}"
     else
-        for cand in 25 21 17 11 8; do
-            if [ -d "/opt/java/${cand}" ]; then
+        if command -v install-java.sh >/dev/null 2>&1; then
+            install-java.sh "${v}" >&2 2>/dev/null || true
+            if [ -d "/opt/java/${v}" ]; then
+                echo "${v}"
+                return
+            fi
+        fi
+
+        # Fall back to newest runtime installed in /opt/java
+        local cand
+        for cand in $(find /opt/java -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort -V -r); do
+            if [ -x "/opt/java/${cand}/bin/java" ]; then
                 echo "${cand}"
                 return
             fi
