@@ -28,15 +28,32 @@ C_RED='\033[31m'
 C_MAGENTA='\033[35m'
 C_DIM='\033[2m'
 
-log() { printf "${C_YELLOW}${C_BOLD}container@pterodactyl~${C_RESET} ${C_BOLD}%s${C_RESET}\n" "$*"; }
-warn() { printf "${C_YELLOW}${C_BOLD}container@pterodactyl~${C_RESET} ${C_YELLOW}${C_BOLD}[warn]${C_RESET} %s\n" "$*"; }
-error() { printf "${C_YELLOW}${C_BOLD}container@pterodactyl~${C_RESET} ${C_RED}${C_BOLD}[error]${C_RESET} %s\n" "$*"; }
+PANEL_NAME="${PANEL_NAME:-${P_SERVER_UUID:+pterodactyl}}"
+PANEL_NAME="${PANEL_NAME:-panel}"
+
+log() { printf "${C_YELLOW}${C_BOLD}container@${PANEL_NAME}~${C_RESET} ${C_BOLD}%s${C_RESET}\n" "$*"; }
+warn() { printf "${C_YELLOW}${C_BOLD}container@${PANEL_NAME}~${C_RESET} ${C_YELLOW}${C_BOLD}[warn]${C_RESET} %s\n" "$*"; }
+error() { printf "${C_YELLOW}${C_BOLD}container@${PANEL_NAME}~${C_RESET} ${C_RED}${C_BOLD}[error]${C_RESET} %s\n" "$*"; }
+
+# Universal directory detection
+if [ -d /home/container ]; then
+    cd /home/container 2>/dev/null || true
+else
+    cd "$(pwd)" 2>/dev/null || true
+fi
+SERVER_DIR="$(pwd)"
+
+# Ensure /usr/local/bin is in PATH and run.sh is accessible locally
+export PATH="/usr/local/bin:${PATH}"
+if [ ! -f ./run.sh ] && [ -f /usr/local/bin/run.sh ]; then
+    ln -sf /usr/local/bin/run.sh ./run.sh 2>/dev/null || cp -f /usr/local/bin/run.sh ./run.sh 2>/dev/null || true
+fi
 
 # --- Persisted settings ------------------------------------------------------
 # .multi-mc.conf is a simple KEY=VALUE file written by the launcher (run.sh)
 # whenever the user answers an interactive setup prompt. Values here only fill
 # in variables that were NOT provided by the panel, so the panel always wins.
-CONF_FILE="/home/container/.multi-mc.conf"
+CONF_FILE="${CONF_FILE:-${SERVER_DIR}/.multi-mc.conf}"
 
 read_conf() { # key -> value (safe: no shell evaluation)
     [ -f "${CONF_FILE}" ] || return 1
@@ -60,12 +77,19 @@ apply_conf() { # key : only fills in empty/unset environment variables
 TZ=${TZ:-UTC}
 export TZ
 
-# Set environment variable that holds the Internal Docker IP.
-INTERNAL_IP=$(ip route get 1 | awk '{print $(NF-2);exit}' 2>/dev/null || echo "127.0.0.1")
-export INTERNAL_IP
+# Cross-panel variable normalization (Pterodactyl, Pelican, Feather, Wisp, Jexactyl, PufferPanel, etc.)
+SERVER_PORT="${SERVER_PORT:-${PORT:-${ALLOCATION_PORT:-${SERVER_PORT_0:-25565}}}}"
+export SERVER_PORT
+SERVER_MEMORY="${SERVER_MEMORY:-${MEMORY:-${MEM_SIZE:-${P_SERVER_MEMORY:-1024}}}}"
+export SERVER_MEMORY
+SERVER_IP="${SERVER_IP:-${IP:-${P_SERVER_IP:-0.0.0.0}}}"
+export SERVER_IP
+SERVER_JARFILE="${SERVER_JARFILE:-${JARFILE:-server.jar}}"
+export SERVER_JARFILE
 
-# Switch to the container's working directory.
-cd /home/container 2>/dev/null || { error "Cannot enter /home/container"; exit 1; }
+# Set environment variable that holds the Internal Docker IP.
+INTERNAL_IP=$(ip route get 1 | awk '{print $(NF-2);exit}' 2>/dev/null || echo "${SERVER_IP}")
+export INTERNAL_IP
 
 # Load persisted settings for anything the panel did not provide.
 for _key in SERVER_TYPE MINECRAFT_VERSION BUILD_NUMBER LOADER_VERSION \
@@ -104,7 +128,7 @@ detect_java_home() {
     if [ -n "${JAVA_URL:-}" ]; then
         log "Custom Java URL specified (${JAVA_URL}); downloading runtime..."
         install-java.sh "${JAVA_URL}" "custom" >&2 || true
-        for cand in "/opt/java/custom" "${HOME}/.java/custom" "/home/container/.java/custom"; do
+        for cand in "/opt/java/custom" "${SERVER_DIR}/java" "${SERVER_DIR}/jre" "${SERVER_DIR}/jdk" "${HOME}/.java/custom" "/home/container/.java/custom"; do
             if [ -x "${cand}/bin/java" ]; then
                 echo "${cand}"
                 return
@@ -118,7 +142,7 @@ detect_java_home() {
         if [[ "${JAVA_VERSION}" =~ ^https?:// ]]; then
             log "Custom Java URL provided in JAVA_VERSION; downloading..."
             install-java.sh "${JAVA_VERSION}" "custom" >&2 || true
-            for cand in "/opt/java/custom" "${HOME}/.java/custom" "/home/container/.java/custom"; do
+            for cand in "/opt/java/custom" "${SERVER_DIR}/java" "${SERVER_DIR}/jre" "${SERVER_DIR}/jdk" "${HOME}/.java/custom" "/home/container/.java/custom"; do
                 if [ -x "${cand}/bin/java" ]; then
                     echo "${cand}"
                     return
@@ -129,7 +153,7 @@ detect_java_home() {
         # Local directory check if requested (custom, local, or directory name)
         case "${JAVA_VERSION}" in
             custom | local | self | manual)
-                for cand in "./java" "./jre" "./jdk" "/home/container/java" "/home/container/jre" "/home/container/jdk" "/opt/java/custom" "${HOME}/.java/custom"; do
+                for cand in "${SERVER_DIR}/java" "${SERVER_DIR}/jre" "${SERVER_DIR}/jdk" "./java" "./jre" "./jdk" "/home/container/java" "/home/container/jre" "/home/container/jdk" "/opt/java/custom" "${HOME}/.java/custom"; do
                     if [ -x "${cand}/bin/java" ]; then
                         echo "${cand}"
                         return
@@ -139,7 +163,7 @@ detect_java_home() {
         esac
 
         # Check pre-installed path
-        for cand in "/opt/java/${JAVA_VERSION}" "${HOME}/.java/${JAVA_VERSION}" "/home/container/.java/${JAVA_VERSION}"; do
+        for cand in "/opt/java/${JAVA_VERSION}" "${HOME}/.java/${JAVA_VERSION}" "${SERVER_DIR}/.java/${JAVA_VERSION}" "/home/container/.java/${JAVA_VERSION}"; do
             if [ -x "${cand}/bin/java" ]; then
                 echo "${cand}"
                 return
@@ -302,6 +326,17 @@ printf "     and install from any GitHub release with SERVER_TYPE=github.${C_RES
 PARSED=$(printf '%s' "${STARTUP:-}" | sed -e 's/{{/${/g' -e 's/}}/}/g' | sed 's/"/\\"/g')
 eval "PARSED=\"${PARSED}\""
 
-log "${PARSED:-bash run.sh}"
+# Fallback / normalization for run.sh execution across panels
+if [ -z "${PARSED}" ] || [ "${PARSED}" = "bash run.sh" ] || [ "${PARSED}" = "run.sh" ] || [ "${PARSED}" = "./run.sh" ]; then
+    if [ -f ./run.sh ]; then
+        PARSED="bash ./run.sh"
+    elif [ -x /usr/local/bin/run.sh ]; then
+        PARSED="/usr/local/bin/run.sh"
+    else
+        PARSED="bash run.sh"
+    fi
+fi
+
+log "${PARSED}"
 # shellcheck disable=SC2086
-exec env ${PARSED:-bash run.sh}
+exec env ${PARSED}

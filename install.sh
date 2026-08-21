@@ -32,7 +32,26 @@
 
 set -uo pipefail
 
-cd /mnt/server || exit 1
+if [ -d /mnt/server ]; then
+    cd /mnt/server || exit 1
+elif [ -d /home/container ]; then
+    cd /home/container || exit 1
+else
+    cd "$(pwd)" || exit 1
+fi
+SERVER_DIR="$(pwd)"
+
+# Ensure core utilities are available in minimal/custom installer images
+if ! command -v curl >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1 || ! command -v unzip >/dev/null 2>&1 || ! command -v tar >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then
+        apt-get update -qq >/dev/null 2>&1 || true
+        apt-get install -y -qq curl jq unzip tar ca-certificates >/dev/null 2>&1 || true
+    elif command -v apk >/dev/null 2>&1; then
+        apk add --no-cache curl jq unzip tar ca-certificates >/dev/null 2>&1 || true
+    elif command -v dnf >/dev/null 2>&1; then
+        dnf install -y -q curl jq unzip tar ca-certificates >/dev/null 2>&1 || true
+    fi
+fi
 
 DEBUG="${DEBUG:-0}"
 [ "${DEBUG}" = "1" ] && set -x
@@ -156,7 +175,7 @@ java_bin_for_mc() {
         if command -v install-java.sh >/dev/null 2>&1; then
             install-java.sh "${JAVA_URL}" "custom" >&2 2>/dev/null || true
         fi
-        for cand in "/opt/java/custom" "/mnt/server/java" "/mnt/server/jre" "/mnt/server/jdk" "${HOME}/.java/custom"; do
+        for cand in "/opt/java/custom" "${SERVER_DIR}/java" "${SERVER_DIR}/jre" "${SERVER_DIR}/jdk" "/mnt/server/java" "/mnt/server/jre" "/mnt/server/jdk" "/home/container/java" "/home/container/jre" "/home/container/jdk" "${HOME}/.java/custom"; do
             if [ -x "${cand}/bin/java" ]; then
                 echo "${cand}/bin/java"
                 return
@@ -164,8 +183,8 @@ java_bin_for_mc() {
         done
     fi
 
-    # 2. Local custom Java in /mnt/server (the mounted server directory)
-    for cand in "/mnt/server/java" "/mnt/server/jre" "/mnt/server/jdk"; do
+    # 2. Local custom Java in server directory (or mounted directory)
+    for cand in "${SERVER_DIR}/java" "${SERVER_DIR}/jre" "${SERVER_DIR}/jdk" "/mnt/server/java" "/mnt/server/jre" "/mnt/server/jdk" "/home/container/java" "/home/container/jre" "/home/container/jdk"; do
         if [ -x "${cand}/bin/java" ]; then
             echo "${cand}/bin/java"
             return
@@ -425,25 +444,25 @@ install_papermc() { # $1 = project (paper|folia|velocity|waterfall)
     data=$(curl -fsSL -A "${USER_AGENT}" "https://fill.papermc.io/v3/projects/${project}") \
         || fail "Cannot reach the PaperMC download API"
     if [ "${MC_VERSION}" = "latest" ]; then
-        ver=$(echo "${data}" | jq -r '.versions | to_entries[0].key')
+        ver=$(echo "${data}" | jq -r '.versions | to_entries[0].value[0] // .versions | to_entries[0].key')
+    elif curl -fsSL -A "${USER_AGENT}" "https://fill.papermc.io/v3/projects/${project}/versions/${MC_VERSION}" -o /dev/null 2>/dev/null; then
+        ver="${MC_VERSION}"
+    elif echo "${data}" | jq -e --arg g "${MC_VERSION}" '.versions[$g]' >/dev/null 2>&1; then
+        ver=$(echo "${data}" | jq -r --arg g "${MC_VERSION}" '.versions[$g][0]')
     else
-        if curl -fsSL -A "${USER_AGENT}" "https://fill.papermc.io/v3/projects/${project}/versions/${MC_VERSION}" -o /dev/null 2>/dev/null; then
-            ver="${MC_VERSION}"
-        else
-            warn "Version '${MC_VERSION}' not found for ${project}, defaulting to latest"
-            ver=$(echo "${data}" | jq -r '.versions | to_entries[0].key')
-        fi
+        warn "Version '${MC_VERSION}' not found for ${project}, defaulting to latest"
+        ver=$(echo "${data}" | jq -r '.versions | to_entries[0].value[0] // .versions | to_entries[0].key')
     fi
     builds=$(curl -fsSL -A "${USER_AGENT}" "https://fill.papermc.io/v3/projects/${project}/versions/${ver}" | jq -r '.builds')
     if [ "${BUILD_NUMBER}" = "latest" ]; then
         build=$(echo "${builds}" | jq -r '.[0]')
-    elif echo "${builds}" | jq -e --arg b "${BUILD_NUMBER}" 'index($b)' > /dev/null 2>&1; then
+    elif echo "${builds}" | jq -e --arg b "${BUILD_NUMBER}" 'index($b|tonumber? // $b)' > /dev/null 2>&1; then
         build="${BUILD_NUMBER}"
     else
         warn "Build ${BUILD_NUMBER} not found for ${project} ${ver}, using latest"
         build=$(echo "${builds}" | jq -r '.[0]')
     fi
-    url=$(curl -fsSL -A "${USER_AGENT}" "https://fill.papermc.io/v3/projects/${project}/versions/${ver}/builds/${build}" | jq -r '.downloads["server:default"].url')
+    url=$(curl -fsSL -A "${USER_AGENT}" "https://fill.papermc.io/v3/projects/${project}/versions/${ver}/builds/${build}" | jq -r '.downloads["server:default"].url // .downloads[to_entries[0].key].url')
     [ -z "${url}" ] || [ "${url}" = "null" ] && fail "No download found for ${project} ${ver} build ${build}"
     RESOLVED_VERSION="${ver} (build ${build})"
     log "Downloading ${project} ${ver} build ${build}"
@@ -498,8 +517,8 @@ install_spigot() {
     fi
     built=$(ls spigot-*.jar 2>/dev/null | grep -v BuildTools | head -n1)
     [ -z "${built}" ] && fail "BuildTools finished but no Spigot jar was produced"
-    mv "${built}" "/mnt/server/${JARFILE}"
-    cd /mnt/server || exit 1
+    mv "${built}" "${SERVER_DIR}/${JARFILE}"
+    cd "${SERVER_DIR}" || exit 1
     rm -rf /tmp/buildtools /tmp/jdk
     ok "Spigot build complete"
 }
@@ -618,7 +637,7 @@ install_quilt() {
         loader=$(curl -fsSL -A "${USER_AGENT}" "https://meta.quiltmc.org/v3/versions/loader/${mc}" | jq -r '.[0].loader.version')
     fi
     download "${installer_url}" quilt-installer.jar
-    "$(java_bin_for_mc "${mc}")" -jar quilt-installer.jar install server "${mc}" "${loader}" --download-server --install-dir=/mnt/server \
+    "$(java_bin_for_mc "${mc}")" -jar quilt-installer.jar install server "${mc}" "${loader}" --download-server --install-dir="${SERVER_DIR}" \
         || fail "Quilt installer failed"
     rm -f quilt-installer.jar
     mv -f quilt-server-launch.jar "${JARFILE}"
