@@ -105,12 +105,11 @@ receive **Java 8**. Snapshots: set `MINECRAFT_VERSION=latest-snapshot`
 
 ```
 Minecraft-Eggs/
-├── egg-minecraft-multi.json   ← Universal all-in-one egg (18+ loaders & proxies)
-├── egg-minecraft-custom.json  ← Dedicated Custom & Generic egg (custom jars, URLs, commands)
+├── egg-minecraft-multi.json   ← Universal all-in-one egg (18+ loaders, custom jars, archives & commands)
 ├── Dockerfile                 ← universal runtime image (multi-JDK + tools)
 ├── entrypoint.sh              ← image entrypoint (conf load, Java auto-select, banner)
 ├── run.sh                     ← universal launcher (dispatch, prompts, GC tuning)
-├── install.sh                 ← universal install script (embedded in the eggs)
+├── install.sh                 ← universal install script (embedded in the egg)
 ├── install-java.sh            ← Docker build helper (Adoptium JRE downloader)
 ├── tests/                     ← Automated Docker test suite (all loaders & versions)
 ├── .github/workflows/docker-image.yml  ← CI: builds & publishes the GHCR image
@@ -121,21 +120,17 @@ Minecraft-Eggs/
 
 ## Setup
 
-### 1. Choose & import your egg
+### 1. Import the egg
 
-- **All-in-One Egg**: [`egg-minecraft-multi.json`](egg-minecraft-multi.json) - Runs Vanilla, Paper, Purpur, Fabric, Forge, NeoForge, Velocity, Bedrock, and all 18+ server types with automatic version resolution.
-- **Custom & Generic Egg**: [`egg-minecraft-custom.json`](egg-minecraft-custom.json) - Dedicated egg for custom server jars, direct archive downloads (`.zip`/`.tar.gz`), GitHub releases, and user-defined start commands.
-
-To import:
-1. Download either [`egg-minecraft-multi.json`](egg-minecraft-multi.json) or [`egg-minecraft-custom.json`](egg-minecraft-custom.json).
-2. Go to **Admin → Nests → Minecraft** in Pterodactyl / Pelican / Feather Panel.
-3. Click **Import Egg**, upload the `.json` file, and click **Save**.
+1. Download [`egg-minecraft-multi.json`](egg-minecraft-multi.json).
+2. Go to **Admin → Nests → Minecraft** in Pterodactyl / Pelican / Feather Panel (create the nest first if needed).
+3. Click **Import Egg**, upload `egg-minecraft-multi.json`, and click **Save**.
 
 ### 2. Create a server
 
 | Field | Value |
 |---|---|
-| **Egg** | `Multi Minecraft` or `Multi Minecraft - Custom & Generic` |
+| **Egg** | `Multi Minecraft` |
 | **Docker image** | `Universal (Auto Java 8-26+)` (recommended) |
 | **Ports** | `25565` (Java), `19132` (Bedrock / Nukkit / PocketMine), `25577` (proxies) |
 | **Memory** | 1 GB minimum (2-4 GB recommended for Paper+ / modded) |
