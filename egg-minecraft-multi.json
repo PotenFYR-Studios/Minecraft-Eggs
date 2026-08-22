@@ -1,9 +1,9 @@
 {
     "config": {
-        "logs": "{}",
-        "startup": "{\"done\":[\"Done (\",\")! For help, type \\\"help\\\"\",\"Listening on\",\"Server started.\",\"Default game type: Survival\",\"[Server] Server started\"],\"user_interaction\":[],\"strip_ansi\":false}",
+        "files": "{\"server.properties\":{\"parser\":\"properties\",\"find\":{\"server-ip\":\"0.0.0.0\",\"server-port\":\"{{server.build.default.port}}\",\"query.port\":\"{{server.build.default.port}}\"}}}",
+        "startup": "{\"done\":\")! For help, type \\\"help\\\"\",\"user_interaction\":[]}",
         "stop": "stop",
-        "files": "{\"server.properties\":{\"parser\":\"properties\",\"find\":{\"query.port\":\"{{server.build.default.port}}\",\"server-ip\":\"0.0.0.0\",\"server-port\":\"{{server.build.default.port}}\"}},\"config.yml\":{\"parser\":\"yaml\",\"find\":{\"listeners[0].host\":\"0.0.0.0:{{server.build.default.port}}\"}},\"velocity.toml\":{\"parser\":\"file\",\"find\":{\"bind = \\\"0.0.0.0:25577\\\"\":\"bind = \\\"0.0.0.0:{{server.build.default.port}}\\\"\"}}}"
+        "logs": "{}"
     },
     "docker_images": {
         "Universal (Auto Java 8-26+)": "ghcr.io/potenfyr-studios/minecraft-eggs:latest",
