@@ -258,6 +258,69 @@ fi
 log "Executing: ${JAVA_CMD}"
 log "JVM flags source: ${FLAGS_SOURCE}"
 
+# ---------------------------------------------------------------------------
+# Server process execution & automated crash diagnostics
+# ---------------------------------------------------------------------------
+print_crash_diagnostics() {
+    local code="$1"
+    local divider
+    divider=$(printf '%*s' 62 '' | tr ' ' '=')
+    local sub_divider
+    sub_divider=$(printf '%*s' 62 '' | tr ' ' '-')
+
+    printf "\n${C_RED}${C_BOLD}%s${C_RESET}\n" "${divider}"
+    printf "${C_RED}${C_BOLD}  [CRASH DETECTED] Server process terminated abnormally (Exit code: %s)${C_RESET}\n" "${code}"
+    printf "${C_RED}${C_BOLD}%s${C_RESET}\n" "${divider}"
+    
+    printf "  ${C_YELLOW}${C_BOLD}Context Summary:${C_RESET}\n"
+    printf "  • Software   : %s (%s)\n" "${TYPE}" "${MINECRAFT_VERSION:-latest}"
+    printf "  • Java       : %s\n" "$(java -version 2>&1 | head -n1 || echo 'Java not found')"
+    printf "  • Memory     : %s MB\n" "${SERVER_MEMORY:-1024}"
+    printf "  • Directory  : %s\n" "${SERVER_DIR:-$(pwd)}"
+    printf "  • Disk Free  : %s\n" "$(df -h . 2>/dev/null | awk 'NR==2 {print $4}' || echo 'unknown')"
+
+    printf "${C_DIM}%s${C_RESET}\n" "${sub_divider}"
+    printf "  ${C_GREEN}${C_BOLD}Automated Diagnostics:${C_RESET}\n"
+
+    # 1. Check EULA
+    if [ -f eula.txt ] && grep -qi "eula=false" eula.txt; then
+        printf "  ${C_YELLOW}⚠ EULA Not Accepted:${C_RESET} eula.txt contains eula=false. Accept EULA in panel or set eula=true.\n"
+    elif [ ! -f eula.txt ] && [ "${TYPE}" != "bedrock" ] && [ "${TYPE}" != "pocketmine" ] && [ "${TYPE}" != "velocity" ] && [ "${TYPE}" != "waterfall" ] && [ "${TYPE}" != "bungeecord" ]; then
+        printf "  ${C_YELLOW}⚠ EULA Missing:${C_RESET} Server exited on initial startup to generate eula.txt. Accept EULA and start again.\n"
+    fi
+
+    # 2. Check Out of Memory
+    if [ "${code}" -eq 137 ]; then
+        printf "  ${C_RED}⚠ Out Of Memory (OOM Killer):${C_RESET} Container exceeded memory limit (${SERVER_MEMORY:-1024} MB). Increase server memory in panel.\n"
+    fi
+
+    # 3. Check for crash reports / latest logs
+    if [ -d crash-reports ]; then
+        local latest_crash
+        latest_crash=$(ls -t crash-reports/crash-*.txt 2>/dev/null | head -n1)
+        if [ -n "${latest_crash}" ]; then
+            printf "  ${C_YELLOW}⚠ Crash Report Found:${C_RESET} %s\n" "${latest_crash}"
+            printf "  ${C_DIM}----------------------------------------${C_RESET}\n"
+            grep -E '^(Description|Caused by|java\.lang\.)' "${latest_crash}" 2>/dev/null | head -n6 | sed 's/^/    /'
+            printf "  ${C_DIM}----------------------------------------${C_RESET}\n"
+        fi
+    elif [ -f logs/latest.log ]; then
+        local error_lines
+        error_lines=$(grep -iE '(error|exception|fatal|failed)' logs/latest.log 2>/dev/null | tail -n5)
+        if [ -n "${error_lines}" ]; then
+            printf "  ${C_YELLOW}⚠ Recent Errors in logs/latest.log:${C_RESET}\n"
+            printf "${C_DIM}%s${C_RESET}\n" "${error_lines}" | sed 's/^/    /'
+        fi
+    fi
+
+    printf "${C_DIM}%s${C_RESET}\n" "${sub_divider}"
+    printf "  ${C_GREEN}${C_BOLD}Next Steps to Resolve:${C_RESET}\n"
+    printf "  1. Inspect full log output above for specific mod/plugin incompatibilities.\n"
+    printf "  2. If Java version mismatch occurs, select compatible JAVA_VERSION in panel Variables.\n"
+    printf "  3. Trigger 'Reinstall Server' if server files or libraries are corrupted.\n"
+    printf "${C_RED}${C_BOLD}%s${C_RESET}\n\n" "${divider}"
+}
+
 # BungeeCord-family proxies stop with "end" instead of "stop". Translate the
 # panel's stop command on the fly so one stop command works for every type.
 case "${TYPE}" in
@@ -266,8 +329,17 @@ case "${TYPE}" in
             if [ "${line}" = "stop" ]; then line="end"; fi
             printf '%s\n' "${line}"
         done) | bash -c "${JAVA_CMD}"
-        exit "${PIPESTATUS[1]:-$?}"
+        EXIT_STATUS="${PIPESTATUS[1]:-$?}"
+        ;;
+    *)
+        bash -c "${JAVA_CMD}"
+        EXIT_STATUS=$?
         ;;
 esac
 
-exec bash -c "${JAVA_CMD}"
+if [ ${EXIT_STATUS} -ne 0 ] && [ ${EXIT_STATUS} -ne 130 ] && [ ${EXIT_STATUS} -ne 143 ]; then
+    print_crash_diagnostics "${EXIT_STATUS}"
+    sleep 5
+fi
+
+exit ${EXIT_STATUS}
