@@ -239,25 +239,30 @@ java_bin_for_mc() {
 
 ensure_server_properties() {
     [ -f server.properties ] && return 0
+    # Do not write server.properties by default; let the server software generate native configs
+    # unless explicitly requested or custom properties were defined
+    if [ "${GENERATE_CONFIG:-0}" != "1" ] && [ "${MOTD:-A Minecraft Server}" = "A Minecraft Server" ] && [ "${MAX_PLAYERS:-20}" = "20" ] && [ "${ONLINE_MODE:-true}" = "true" ] && [ -z "${DIFFICULTY:-}" ] && [ -z "${GAMEMODE:-}" ] && [ -z "${RCON_PASSWORD:-}" ]; then
+        return 0
+    fi
     {
         printf 'server-ip=0.0.0.0\n'
         printf 'server-port=25565\n'
         printf 'query.port=25565\n'
-        printf 'motd=%s\n' "${MOTD}"
-        printf 'max-players=%s\n' "${MAX_PLAYERS}"
-        printf 'view-distance=%s\n' "${VIEW_DISTANCE}"
-        printf 'online-mode=%s\n' "${ONLINE_MODE}"
-        [ -n "${DIFFICULTY}" ] && printf 'difficulty=%s\n' "${DIFFICULTY}"
-        [ -n "${GAMEMODE}" ] && printf 'gamemode=%s\n' "${GAMEMODE}"
-        [ -n "${PVP}" ] && printf 'pvp=%s\n' "${PVP}"
-        if [ -n "${RCON_PASSWORD}" ]; then
+        printf 'motd=%s\n' "${MOTD:-A Minecraft Server}"
+        printf 'max-players=%s\n' "${MAX_PLAYERS:-20}"
+        printf 'view-distance=%s\n' "${VIEW_DISTANCE:-10}"
+        printf 'online-mode=%s\n' "${ONLINE_MODE:-true}"
+        [ -n "${DIFFICULTY:-}" ] && printf 'difficulty=%s\n' "${DIFFICULTY}"
+        [ -n "${GAMEMODE:-}" ] && printf 'gamemode=%s\n' "${GAMEMODE}"
+        [ -n "${PVP:-}" ] && printf 'pvp=%s\n' "${PVP}"
+        if [ -n "${RCON_PASSWORD:-}" ]; then
             printf 'enable-rcon=true\n'
             printf 'rcon.password=%s\n' "${RCON_PASSWORD}"
         else
             printf 'enable-rcon=false\n'
         fi
     } > server.properties
-    log "Wrote default server.properties (motd='${MOTD}', max-players=${MAX_PLAYERS})"
+    log "Wrote custom server.properties (motd='${MOTD:-A Minecraft Server}', max-players=${MAX_PLAYERS:-20})"
 }
 
 # ---------------------------------------------------------------------------
@@ -341,6 +346,7 @@ install_world() {
 
 ensure_config_yml() {
     [ -f config.yml ] && return 0
+    [ "${GENERATE_CONFIG:-0}" = "1" ] || return 0
     cat > config.yml <<'EOF'
 listeners:
 - query_port: 25577
@@ -375,6 +381,7 @@ EOF
 
 ensure_velocity_toml() {
     [ -f velocity.toml ] && return 0
+    [ "${GENERATE_CONFIG:-0}" = "1" ] || return 0
     cat > velocity.toml <<'EOF'
 bind = "0.0.0.0:25577"
 motd = "&1A Velocity Server"
