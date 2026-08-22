@@ -27,7 +27,7 @@ C_MAGENTA='\033[35m'
 C_DIM='\033[2m'
 
 # Shift out redundant container entrypoint invocations from Docker CMD
-if [ $# -gt 0 ]; then
+while [ $# -gt 0 ]; do
     case "$1" in
         /entrypoint.sh | /usr/local/bin/entrypoint.sh | entrypoint.sh)
             shift
@@ -35,10 +35,15 @@ if [ $# -gt 0 ]; then
         /bin/bash | /usr/bin/bash | bash | /bin/sh | sh)
             if [ "${2:-}" = "/entrypoint.sh" ] || [ "${2:-}" = "/usr/local/bin/entrypoint.sh" ] || [ "${2:-}" = "entrypoint.sh" ]; then
                 shift 2
+            else
+                break
             fi
             ;;
+        *)
+            break
+            ;;
     esac
-fi
+done
 
 PANEL_NAME="${PANEL_NAME:-${P_SERVER_UUID:+pterodactyl}}"
 PANEL_NAME="${PANEL_NAME:-panel}"
@@ -331,11 +336,9 @@ CMD_TO_RUN="${STARTUP:-}"
 if [ -z "${CMD_TO_RUN}" ] && [ $# -gt 0 ]; then
     CMD_TO_RUN="$*"
 fi
+[ -z "${CMD_TO_RUN}" ] && CMD_TO_RUN="bash ./run.sh"
 
-# Convert all of the "{{VARIABLE}}" parts of the command into the expected
-# shell variable format of "${VARIABLE}" before evaluating the string.
-PARSED=$(printf '%s' "${CMD_TO_RUN:-bash run.sh}" | sed -e 's/{{/${/g' -e 's/}}/}/g' | sed 's/"/\\"/g')
-eval "PARSED=\"${PARSED}\""
+PARSED=$(echo "${CMD_TO_RUN}" | sed -e 's/{{/${/g' -e 's/}}/}/g' | eval echo "$(cat -)")
 
 # Fallback / normalization for run.sh execution across panels
 if [ -z "${PARSED}" ] || [ "${PARSED}" = "bash run.sh" ] || [ "${PARSED}" = "run.sh" ] || [ "${PARSED}" = "./run.sh" ] || [ "${PARSED}" = "bash ./run.sh" ]; then
