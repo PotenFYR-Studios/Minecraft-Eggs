@@ -60,10 +60,15 @@ else
 fi
 SERVER_DIR="$(pwd)"
 
-# Ensure /usr/local/bin is in PATH and run.sh is accessible locally
+# Ensure /usr/local/bin is in PATH and scripts are accessible locally in /home/container
 export PATH="/usr/local/bin:${PATH}"
 if [ ! -f ./run.sh ] && [ -f /usr/local/bin/run.sh ]; then
-    ln -sf /usr/local/bin/run.sh ./run.sh 2>/dev/null || cp -f /usr/local/bin/run.sh ./run.sh 2>/dev/null || true
+    cp -f /usr/local/bin/run.sh ./run.sh 2>/dev/null || true
+    chmod +x ./run.sh 2>/dev/null || true
+fi
+if [ ! -f ./install.sh ] && [ -f /usr/local/bin/install.sh ]; then
+    cp -f /usr/local/bin/install.sh ./install.sh 2>/dev/null || true
+    chmod +x ./install.sh 2>/dev/null || true
 fi
 
 # --- Persisted settings ------------------------------------------------------
@@ -341,7 +346,11 @@ if [ -z "${CMD_TO_RUN}" ] && [ $# -gt 0 ]; then
 fi
 [ -z "${CMD_TO_RUN}" ] && CMD_TO_RUN="bash ./run.sh"
 
-PARSED=$(echo "${CMD_TO_RUN}" | sed -e 's/{{/${/g' -e 's/}}/}/g' | eval echo "$(cat -)")
+# Convert all of the "{{VARIABLE}}" parts of the command into the expected
+# shell variable format of "${VARIABLE}" before evaluating the string.
+PARSED="${CMD_TO_RUN}"
+PARSED=$(echo "${PARSED}" | sed -e 's/{{/${/g' -e 's/}}/}/g')
+PARSED=$(eval echo "\"${PARSED}\"")
 
 # Fallback / normalization for run.sh execution across panels
 if [ -z "${PARSED}" ] || [ "${PARSED}" = "bash run.sh" ] || [ "${PARSED}" = "run.sh" ] || [ "${PARSED}" = "./run.sh" ] || [ "${PARSED}" = "bash ./run.sh" ]; then
@@ -352,7 +361,17 @@ if [ -z "${PARSED}" ] || [ "${PARSED}" = "bash run.sh" ] || [ "${PARSED}" = "run
     elif [ -x /run.sh ]; then
         PARSED="/run.sh"
     else
-        PARSED="bash run.sh"
+        PARSED="bash /usr/local/bin/run.sh"
+    fi
+fi
+
+# If the command directly calls java and server files are missing, run installer first
+if echo "${PARSED}" | grep -q "java " && [ ! -f "${SERVER_JARFILE:-server.jar}" ] && [ ! -f unix_args.txt ]; then
+    log "Server files not found. Running automatic installation before starting..."
+    if [ -x /usr/local/bin/install.sh ]; then
+        bash /usr/local/bin/install.sh || warn "Automatic install exited with code $?"
+    elif [ -x /install.sh ]; then
+        bash /install.sh || warn "Automatic install exited with code $?"
     fi
 fi
 

@@ -110,5 +110,4 @@ ENV USER=container HOME=/home/container PATH="/usr/local/bin:/opt/java/21/bin:${
 WORKDIR /home/container
 STOPSIGNAL SIGINT
 
-ENTRYPOINT ["/bin/bash", "/entrypoint.sh"]
 CMD ["/bin/bash", "/entrypoint.sh"]

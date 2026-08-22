@@ -30,14 +30,12 @@
 #    WORLD_URL                world zip to import into ./world (Java servers)
 # =============================================================================
 
-set -uo pipefail
-
 if [ -d /mnt/server ]; then
-    cd /mnt/server || exit 1
+    cd /mnt/server 2>/dev/null || true
 elif [ -d /home/container ]; then
-    cd /home/container || exit 1
+    cd /home/container 2>/dev/null || true
 else
-    cd "$(pwd)" || exit 1
+    cd "$(pwd)" 2>/dev/null || true
 fi
 SERVER_DIR="$(pwd)"
 
