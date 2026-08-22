@@ -57,7 +57,60 @@ DEBUG="${DEBUG:-0}"
 log()  { echo -e "\033[1m\033[33m[install]\033[0m $*"; }
 ok()   { echo -e "\033[1m\033[32m[install][OK]\033[0m $*"; }
 warn() { echo -e "\033[1m\033[33m[install][warn]\033[0m $*"; }
-fail() { echo -e "\033[1m\033[31m[install][ERROR]\033[0m $*"; exit 1; }
+
+fail() {
+    local err_msg="$1"
+    local suggestion="${2:-}"
+    local divider
+    divider=$(printf '%*s' 62 '' | tr ' ' '=')
+    local sub_divider
+    sub_divider=$(printf '%*s' 62 '' | tr ' ' '-')
+
+    echo ""
+    echo -e "\033[1;31m${divider}\033[0m"
+    echo -e "\033[1;31m  [INSTALL ERROR] Server installation could not complete\033[0m"
+    echo -e "\033[1;31m${divider}\033[0m"
+    echo -e "  \033[1;33mError Details:\033[0m ${err_msg}"
+    echo -e "  \033[1;36mServer Type  :\033[0m ${PROJECT_TYPE:-vanilla} (${MC_VERSION:-latest})"
+    [ -n "${BUILD_NUMBER:-}" ] && [ "${BUILD_NUMBER}" != "latest" ] && echo -e "  \033[1;36mBuild Number :\033[0m ${BUILD_NUMBER}"
+    [ -n "${LOADER_VERSION:-}" ] && [ "${LOADER_VERSION}" != "latest" ] && echo -e "  \033[1;36mLoader Ver   :\033[0m ${LOADER_VERSION}"
+    [ -n "${DL_URL:-}" ] && echo -e "  \033[1;36mDownload URL :\033[0m ${DL_URL}"
+    echo -e "  \033[1;36mTarget Path  :\033[0m ${SERVER_DIR:-$(pwd)}/${JARFILE:-server.jar}"
+    echo -e "  \033[1;36mFree Space   :\033[0m $(df -h . 2>/dev/null | awk 'NR==2 {print $4}' || echo 'unknown')"
+
+    echo -e "\033[2;37m${sub_divider}\033[0m"
+    echo -e "  \033[1;32mTroubleshooting Guide:\033[0m"
+    if [ -n "${suggestion}" ]; then
+        echo -e "  • ${suggestion}"
+    else
+        case "${PROJECT_TYPE}" in
+            vanilla | paper | purpur | folia | fabric | quilt | spigot)
+                echo -e "  • Ensure Minecraft Version '${MC_VERSION}' exists for ${PROJECT_TYPE}."
+                echo -e "  • Check your panel network / DNS connectivity to download repositories."
+                echo -e "  • Set SHOW_VERSIONS=1 in panel Variables and Reinstall to see available versions."
+                ;;
+            forge | neoforge)
+                echo -e "  • Ensure loader version '${LOADER_VERSION}' is compatible with MC '${MC_VERSION}'."
+                echo -e "  • Allocate sufficient memory (at least 2048 MB is recommended for Forge installer)."
+                ;;
+            github)
+                echo -e "  • Verify that '${GITHUB_REPO}' is public and has releases."
+                echo -e "  • Check if GITHUB_ASSET matches the release asset filename."
+                ;;
+            custom)
+                echo -e "  • Check that DL_URL points to a valid, publicly reachable direct download link."
+                ;;
+            *)
+                echo -e "  • Verify server configuration variables and retry the installation."
+                ;;
+        esac
+    fi
+    echo -e "  • For full verbose installer trace, set DEBUG=1 in panel Variables."
+    echo -e "\033[1;31m${divider}\033[0m"
+    echo ""
+    sleep 3
+    exit 1
+}
 
 PROJECT_TYPE=$(echo "${SERVER_TYPE:-vanilla}" | tr '[:upper:]' '[:lower:]')
 MC_VERSION="${MINECRAFT_VERSION:-latest}"
