@@ -206,7 +206,10 @@ case "${TYPE}" in
         exec php ./PocketMine-MP.phar --no-wizard
         ;;
     custom)
-        exec bash -c "${CUSTOM_COMMAND:-java -Xmx1024M -jar ${SERVER_JARFILE:-server.jar}}"
+        if [ -n "${CUSTOM_COMMAND:-}" ]; then
+            log "Executing custom command: ${CUSTOM_COMMAND}"
+            exec bash -c "${CUSTOM_COMMAND}"
+        fi
         ;;
 esac
 

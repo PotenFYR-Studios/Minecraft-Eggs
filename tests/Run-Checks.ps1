@@ -18,8 +18,9 @@ $testCases = @(
     @{ Type = "bungeecord"; Version = "latest"; File = "server.jar"; Desc = "BungeeCord Latest" },
     @{ Type = "bedrock"; Version = "latest"; File = "bedrock_server"; Desc = "Bedrock Dedicated Server Latest" },
     @{ Type = "pocketmine"; Version = "latest"; File = "PocketMine-MP.phar"; Desc = "PocketMine-MP Latest" },
-    @{ Type = "neoforge"; Version = "1.20.4"; File = "unix_args.txt"; Desc = "NeoForge 1.20.4" },
-    @{ Type = "forge"; Version = "1.20.1"; File = "unix_args.txt"; Desc = "Forge 1.20.1" }
+    @{ Type = "neoforge"; Version = "1.20.4"; Env = ""; File = "unix_args.txt"; Desc = "NeoForge 1.20.4" },
+    @{ Type = "forge"; Version = "1.20.1"; Env = ""; File = "unix_args.txt"; Desc = "Forge 1.20.1" },
+    @{ Type = "custom"; Version = "latest"; Env = "-e DL_URL=https://api.purpurmc.org/v2/purpur/1.20.4/latest/download"; File = "server.jar"; Desc = "Custom Server (DL_URL)" }
 )
 
 $passed = 0
@@ -27,7 +28,8 @@ $failed = 0
 
 foreach ($tc in $testCases) {
     Write-Host "[CHECK] Testing $($tc.Desc) ($($tc.Type) $($tc.Version))..." -ForegroundColor Cyan
-    $cmd = "docker run --rm --user container -e SERVER_TYPE=$($tc.Type) -e MINECRAFT_VERSION=$($tc.Version) -e SERVER_MEMORY=1024 $Image bash -c 'bash /install.sh && test -f $($tc.File)'"
+    $extraEnv = if ($tc.Env) { $tc.Env } else { "" }
+    $cmd = "docker run --rm --user container -e SERVER_TYPE=$($tc.Type) -e MINECRAFT_VERSION=$($tc.Version) -e SERVER_MEMORY=1024 $extraEnv $Image bash -c 'bash /install.sh && test -f $($tc.File)'"
     
     $start = Get-Date
     Invoke-Expression $cmd
