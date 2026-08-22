@@ -16,8 +16,6 @@
 # Future, snapshot, beta, alpha, and obsolete Java versions are also supported
 # on-demand via dynamic installation. Slim per-Java variants are published too.
 
-set -uo pipefail
-
 # --- Colors -----------------------------------------------------------------
 C_RESET='\033[0m'
 C_BOLD='\033[1m'
@@ -353,5 +351,4 @@ if [ -z "${PARSED}" ] || [ "${PARSED}" = "bash run.sh" ] || [ "${PARSED}" = "run
 fi
 
 log "${PARSED}"
-# shellcheck disable=SC2086
-exec env ${PARSED}
+exec bash -c "${PARSED}"

@@ -28,8 +28,6 @@
 # directory it is executed instead of the logic below. All environment
 # variables above remain available.
 
-set -uo pipefail
-
 # --- Colors -----------------------------------------------------------------
 C_RESET='\033[0m'
 C_BOLD='\033[1m'
