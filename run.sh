@@ -53,6 +53,18 @@ else
 fi
 SERVER_DIR="$(pwd)"
 
+# Ensure Java runtime is in PATH even if run.sh is invoked directly
+if ! command -v java >/dev/null 2>&1; then
+    for cand in /opt/java/*/bin/java ~/.java/*/bin/java ./java/bin/java; do
+        if [ -x "${cand}" ]; then
+            JAVA_BIN_DIR="$(dirname "${cand}")"
+            export PATH="${JAVA_BIN_DIR}:${PATH}"
+            export JAVA_HOME="$(dirname "${JAVA_BIN_DIR}")"
+            break
+        fi
+    done
+fi
+
 # --- Persisted settings ------------------------------------------------------
 CONF_FILE="${CONF_FILE:-${SERVER_DIR}/.multi-mc.conf}"
 

@@ -227,21 +227,15 @@ detect_java_home() {
     #   anything older   -> Java 8 (including Alpha, Beta, Classic, InDev, Infdev)
     case "${mc}" in
         latest | latest-snapshot)
-            v="26"
+            v="21"
             ;;
         [3-9][0-9].* | 2[7-9].*)
             v=$(echo "${mc}" | cut -d. -f1)
             ;;
-        26.*)
+        26.* | 2[6-9]w*)
             v="26"
             ;;
-        2[0-5].*)
-            v="25"
-            ;;
-        2[6-9]w* | [3-9][0-9]w*)
-            v="26"
-            ;;
-        25w*)
+        2[0-5].* | 25w*)
             v="25"
             ;;
         24w*)
@@ -264,26 +258,15 @@ detect_java_home() {
             ;;
     esac
 
-    # Check if target runtime is installed
-    for cand in "/opt/java/${v}" "${HOME}/.java/${v}"; do
+    # 1. Check if target runtime is installed
+    for cand in "/opt/java/${v}" "${HOME}/.java/${v}" "${SERVER_DIR}/.java/${v}"; do
         if [ -x "${cand}/bin/java" ]; then
             echo "${cand}"
             return
         fi
     done
 
-    # Attempt on-demand download
-    if command -v install-java.sh >/dev/null 2>&1; then
-        install-java.sh "${v}" >&2 2>/dev/null || true
-        for cand in "/opt/java/${v}" "${HOME}/.java/${v}"; do
-            if [ -x "${cand}/bin/java" ]; then
-                echo "${cand}"
-                return
-            fi
-        done
-    fi
-
-    # Fall back to newest runtime installed in /opt/java or ~/.java
+    # 2. Fall back to newest runtime already pre-installed in /opt/java or ~/.java
     local dir
     for dir in "/opt/java" "${HOME}/.java"; do
         if [ -d "${dir}" ]; then
@@ -295,6 +278,17 @@ detect_java_home() {
             done
         fi
     done
+
+    # 3. Attempt on-demand download if missing
+    if command -v install-java.sh >/dev/null 2>&1; then
+        install-java.sh "${v}" >&2 2>/dev/null || true
+        for cand in "/opt/java/${v}" "${HOME}/.java/${v}"; do
+            if [ -x "${cand}/bin/java" ]; then
+                echo "${cand}"
+                return
+            fi
+        done
+    fi
 
     echo ""
 }
