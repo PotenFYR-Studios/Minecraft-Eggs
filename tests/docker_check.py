@@ -33,6 +33,7 @@ TEST_CASES = [
     ("pocketmine", "latest", {}, "PocketMine-MP.phar", "PocketMine-MP (Latest)"),
     ("neoforge", "1.20.4", {}, "unix_args.txt", "NeoForge 1.20.4"),
     ("forge", "1.20.1", {}, "unix_args.txt", "Forge 1.20.1"),
+    ("custom", "latest", {"DL_URL": "https://api.purpurmc.org/v2/purpur/1.20.4/latest/download"}, "server.jar", "Custom Server (DL_URL)"),
 ]
 
 def log(msg):

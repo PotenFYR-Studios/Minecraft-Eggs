@@ -876,8 +876,34 @@ case "${PROJECT_TYPE}" in
     github)      install_github ;;
     custom)
         if [ -n "${DL_URL:-}" ]; then
-            log "Downloading custom jar from DL_URL"
-            download "${DL_URL}" "${JARFILE}"
+            log "Downloading custom server files from DL_URL"
+            case "${DL_URL}" in
+                *.zip)
+                    curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" -o /tmp/custom.zip "${DL_URL}" || fail "Failed to download custom zip"
+                    unzip -o /tmp/custom.zip -d "${SERVER_DIR}" > /dev/null 2>&1
+                    rm -f /tmp/custom.zip
+                    local jar
+                    jar=$(ls *.jar 2>/dev/null | grep -v "${JARFILE}" | head -n1)
+                    if [ -n "${jar}" ] && [ ! -f "${JARFILE}" ]; then
+                        mv "${jar}" "${JARFILE}"
+                    fi
+                    log "Extracted custom zip archive"
+                    ;;
+                *.tar.gz | *.tgz)
+                    curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" -o /tmp/custom.tar.gz "${DL_URL}" || fail "Failed to download custom tar.gz"
+                    tar -xzf /tmp/custom.tar.gz -C "${SERVER_DIR}" > /dev/null 2>&1
+                    rm -f /tmp/custom.tar.gz
+                    local jar
+                    jar=$(ls *.jar 2>/dev/null | grep -v "${JARFILE}" | head -n1)
+                    if [ -n "${jar}" ] && [ ! -f "${JARFILE}" ]; then
+                        mv "${jar}" "${JARFILE}"
+                    fi
+                    log "Extracted custom tar.gz archive"
+                    ;;
+                *)
+                    download "${DL_URL}" "${JARFILE}"
+                    ;;
+            esac
         else
             log "Custom server type: nothing to download (set DL_URL or upload your own files)"
         fi
