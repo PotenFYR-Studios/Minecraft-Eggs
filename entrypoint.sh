@@ -128,7 +128,7 @@ detect_java_home() {
     local mc="${MINECRAFT_VERSION:-latest}"
     local v=""
 
-    type="${type,,}"
+    type=$(echo "${type}" | tr '[:upper:]' '[:lower:]')
 
     # Non-Java server types don't need a JVM.
     case "${type}" in
