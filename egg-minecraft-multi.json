@@ -24,7 +24,7 @@
     },
     "image": "ghcr.io/potenfyr-studios/minecraft-eggs:latest",
     "file_denylist": [],
-    "startup": "bash run.sh",
+    "startup": "run.sh",
     "config": {
         "files": "{\"server.properties\":{\"parser\":\"properties\",\"find\":{\"server-ip\":\"0.0.0.0\",\"server-port\":\"{{server.build.default.port}}\",\"query.port\":\"{{server.build.default.port}}\"}}}",
         "startup": "{\"done\":\")! For help, type \\\"help\\\"\",\"user_interaction\":[]}",

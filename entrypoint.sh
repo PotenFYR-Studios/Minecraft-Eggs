@@ -60,16 +60,9 @@ else
 fi
 SERVER_DIR="$(pwd)"
 
-# Ensure /usr/local/bin is in PATH and scripts are accessible locally in /home/container
+# Ensure /usr/local/bin is in PATH (internal scripts live in the image, keeping server dir clean)
 export PATH="/usr/local/bin:${PATH}"
-if [ ! -f ./run.sh ] && [ -f /usr/local/bin/run.sh ]; then
-    cp -f /usr/local/bin/run.sh ./run.sh 2>/dev/null || true
-    chmod +x ./run.sh 2>/dev/null || true
-fi
-if [ ! -f ./install.sh ] && [ -f /usr/local/bin/install.sh ]; then
-    cp -f /usr/local/bin/install.sh ./install.sh 2>/dev/null || true
-    chmod +x ./install.sh 2>/dev/null || true
-fi
+rm -f ./run.sh ./install.sh 2>/dev/null || true
 
 # --- Persisted settings ------------------------------------------------------
 # .multi-mc.conf is a simple KEY=VALUE file written by the launcher (run.sh)
@@ -344,7 +337,7 @@ CMD_TO_RUN="${STARTUP:-}"
 if [ -z "${CMD_TO_RUN}" ] && [ $# -gt 0 ]; then
     CMD_TO_RUN="$*"
 fi
-[ -z "${CMD_TO_RUN}" ] && CMD_TO_RUN="bash ./run.sh"
+[ -z "${CMD_TO_RUN}" ] && CMD_TO_RUN="run.sh"
 
 # Convert all of the "{{VARIABLE}}" parts of the command into the expected
 # shell variable format of "${VARIABLE}" before evaluating the string.
@@ -352,18 +345,12 @@ PARSED="${CMD_TO_RUN}"
 PARSED=$(echo "${PARSED}" | sed -e 's/{{/${/g' -e 's/}}/}/g')
 PARSED=$(eval echo "\"${PARSED}\"")
 
-# Fallback / normalization for run.sh execution across panels
-if [ -z "${PARSED}" ] || [ "${PARSED}" = "bash run.sh" ] || [ "${PARSED}" = "run.sh" ] || [ "${PARSED}" = "./run.sh" ] || [ "${PARSED}" = "bash ./run.sh" ]; then
-    if [ -f ./run.sh ]; then
-        PARSED="bash ./run.sh"
-    elif [ -x /usr/local/bin/run.sh ]; then
+# Normalize any run.sh execution variants (old and new panel formats) to internal binary
+case "${PARSED}" in
+    "bash run.sh" | "run.sh" | "./run.sh" | "bash ./run.sh" | "/run.sh" | "bash /run.sh" | "")
         PARSED="/usr/local/bin/run.sh"
-    elif [ -x /run.sh ]; then
-        PARSED="/run.sh"
-    else
-        PARSED="bash /usr/local/bin/run.sh"
-    fi
-fi
+        ;;
+esac
 
 # If the command directly calls java and server files are missing, run installer first
 if echo "${PARSED}" | grep -q "java " && [ ! -f "${SERVER_JARFILE:-server.jar}" ] && [ ! -f unix_args.txt ]; then
