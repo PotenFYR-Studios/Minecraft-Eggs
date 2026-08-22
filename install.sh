@@ -444,14 +444,14 @@ install_papermc() { # $1 = project (paper|folia|velocity|waterfall)
     data=$(curl -fsSL -A "${USER_AGENT}" "https://fill.papermc.io/v3/projects/${project}") \
         || fail "Cannot reach the PaperMC download API"
     if [ "${MC_VERSION}" = "latest" ]; then
-        ver=$(echo "${data}" | jq -r '.versions | to_entries[0].value[0] // .versions | to_entries[0].key')
+        ver=$(echo "${data}" | jq -r '([.versions[][]][0] // [.versions | keys[]][0])')
     elif curl -fsSL -A "${USER_AGENT}" "https://fill.papermc.io/v3/projects/${project}/versions/${MC_VERSION}" -o /dev/null 2>/dev/null; then
         ver="${MC_VERSION}"
     elif echo "${data}" | jq -e --arg g "${MC_VERSION}" '.versions[$g]' >/dev/null 2>&1; then
         ver=$(echo "${data}" | jq -r --arg g "${MC_VERSION}" '.versions[$g][0]')
     else
         warn "Version '${MC_VERSION}' not found for ${project}, defaulting to latest"
-        ver=$(echo "${data}" | jq -r '.versions | to_entries[0].value[0] // .versions | to_entries[0].key')
+        ver=$(echo "${data}" | jq -r '([.versions[][]][0] // [.versions | keys[]][0])')
     fi
     builds=$(curl -fsSL -A "${USER_AGENT}" "https://fill.papermc.io/v3/projects/${project}/versions/${ver}" | jq -r '.builds')
     if [ "${BUILD_NUMBER}" = "latest" ]; then
@@ -462,7 +462,7 @@ install_papermc() { # $1 = project (paper|folia|velocity|waterfall)
         warn "Build ${BUILD_NUMBER} not found for ${project} ${ver}, using latest"
         build=$(echo "${builds}" | jq -r '.[0]')
     fi
-    url=$(curl -fsSL -A "${USER_AGENT}" "https://fill.papermc.io/v3/projects/${project}/versions/${ver}/builds/${build}" | jq -r '.downloads["server:default"].url // .downloads[to_entries[0].key].url')
+    url=$(curl -fsSL -A "${USER_AGENT}" "https://fill.papermc.io/v3/projects/${project}/versions/${ver}/builds/${build}" | jq -r '(.downloads["server:default"].url // (.downloads | to_entries[0].value.url))')
     [ -z "${url}" ] || [ "${url}" = "null" ] && fail "No download found for ${project} ${ver} build ${build}"
     RESOLVED_VERSION="${ver} (build ${build})"
     log "Downloading ${project} ${ver} build ${build}"

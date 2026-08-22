@@ -106,9 +106,8 @@ COPY run.sh /usr/local/bin/run.sh
 RUN chmod +x /entrypoint.sh /usr/local/bin/entrypoint.sh /run.sh /usr/local/bin/run.sh /install.sh /usr/local/bin/install.sh /usr/local/bin/install-java.sh
 
 USER container
-ENV USER=container HOME=/home/container
+ENV USER=container HOME=/home/container PATH="/usr/local/bin:/opt/java/21/bin:${PATH}"
 WORKDIR /home/container
 STOPSIGNAL SIGINT
 
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["/bin/bash", "/entrypoint.sh"]
