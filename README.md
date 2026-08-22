@@ -14,14 +14,14 @@
   <a href="https://github.com/PotenFYR-Studios/Minecraft-Eggs"><img src="https://img.shields.io/badge/Java-8%20%7C%2011%20%7C%2017%20%7C%2021%20%7C%2025%20%7C%2026%2B-orange?style=for-the-badge&logo=openjdk&logoColor=white" alt="Java Support"></a>
 </p>
 
-```
-.        :    ::: :::.    :::. .,::::::     .,-:::::   :::::::..      ::;.      .-:::::' ::::::::::::      .        :     ...    :::  :::      :::::::::::: :::      .,::::::     .,-:::::/     .,-:::::/  
-;;,.    ;;;   ;;; `;;;;,  `;;; ;;;;''''   ,;;;'````'   ;;;;``;;;;     ;;`;;     ;;;''''  ;;;;;;;;''''      ;;,.    ;;;    ;;     ;;;  ;;;      ;;;;;;;;'''' ;;;      ;;;;''''   ,;;-'````'    ,;;-'````'   
-[[[[, ,[[[[,  [[[   [[[[[. `[[  [[cccc    [[[           [[[,/[[['    '[[ '[[,   [[[,,==       [[           [[[[, ,[[[[,  [['     [[[  [[[           [[      [[[       [[cccc    [[[   [[[[[[/ [[[   [[[[[[/
-$$$$$$$$"$$$  $$$   $$$ "Y$c$$  $$""""    $$$           $$$$$$c     c$$$cc$$$c  `$$$"``       $$           $$$$$$$$"$$$  $$      $$$  $$'           $$      $$$ cccc  $$""""    "$$c.    "$$  "$$c.    "$$ 
-888 Y88" 888o 888   888    Y88  888oo,__  `88bo,__,o,   888b "88bo,  888   888,  888          88,          888 Y88" 888o 88    .d888 o88oo,.__      88,     888       888oo,__   `Y8bo,,,o88o  `Y8bo,,,o88o
-MMM  M'  "MMM MMM   MMM     YM  """"YUMMM   "YUMMMMMP"  MMMM   "W"   YMM   ""`   "MM,         MMM          MMM  M'  "MMM  "YmmMMMM"" """"YUMMM      MMM     MMM       """"YUMMM    `'YMUP"YMM    `'YMUP"YMM
-                                                                                                                                                      - By PotenFYR Studios
+```text
+   __  ___      ____  _       __  ___     
+  /  |/  /_  __/ / /_(_)     /  |/  /____ 
+ / /|_/ / / / / / __/ /_____/ /|_/ / ___/ 
+/ /  / / /_/ / / /_/ /_____/ /  / / /__   
+/_/  /_/\__,_/_/\__/_/     /_/  /_/\___/   
+  » Universal Minecraft Server Runtime (Java 8-26+ & Bedrock)
+    By PotenFYR Studios • support@potenfyr.in
 ```
 
 ---
