@@ -306,28 +306,31 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Startup banner (Calvin S font, ANSI gradient colors)
+# Startup banner (Compact Slant font, clean ANSI gradient)
 # ---------------------------------------------------------------------------
-BANNER='\033[1;33m.        :    ::: :::.    :::. .,::::::     .,-:::::   :::::::..      ::;.      .-:::::'\'' ::::::::::::      .        :     ...    :::  :::      :::::::::::: :::      .,::::::     .,-:::::/     .,-:::::/  \033[0m\n\033[1;37m;;,.    ;;;   ;;; `;;;;,  `;;; ;;;;'\'''\'''\'''\''   ,;;;'\''````'\''   ;;;;``;;;;     ;;`;;     ;;;'\'''\'''\'''\''  ;;;;;;;;'\'''\'''\'''\''      ;;,.    ;;;    ;;     ;;;  ;;;      ;;;;;;;;'\'''\'''\'''\'' ;;;      ;;;;'\'''\'''\'''\''   ,;;-'\''````'\''    ,;;-'\''````'\''   \033[0m\n\033[1;34m[[[[, ,[[[[,  [[[   [[[[[. `[[  [[cccc    [[[           [[[,/[[['\''    '\''[[ '\''[[,   [[[,,==       [[           [[[[, ,[[[[,  [['\''     [[[  [[[           [[      [[[       [[cccc    [[[   [[[[[[/ [[[   [[[[[[/\033[0m\n\033[1;36m$$$$$$$$"$$$  $$$   $$$ "Y$c$$  $$""""    $$$           $$$$$$c     c$$$cc$$$c  `$$$"``       $$           $$$$$$$$"$$$  $$      $$$  $$'\''           $$      $$$ cccc  $$""""    "$$c.    "$$  "$$c.    "$$ \033[0m\n\033[0;33m888 Y88" 888o 888   888    Y88  888oo,__  `88bo,__,o,   888b "88bo,  888   888,  888          88,          888 Y88" 888o 88    .d888 o88oo,.__      88,     888       888oo,__   `Y8bo,,,o88o  `Y8bo,,,o88o\033[0m\n\033[1;30mMMM  M'\''  "MMM MMM   MMM     YM  """"YUMMM   "YUMMMMMP"  MMMM   "W"   YMM   ""`   "MM,         MMM          MMM  M'\''  "MMM  "YmmMMMM"" """"YUMMM      MMM     MMM       """"YUMMM    `'\''YMUP"YMM    `'\''YMUP"YMM\033[0m'
+printf "\n"
+printf "${C_CYAN}${C_BOLD}   __  ___      ____  _       __  ___     ${C_RESET}\n"
+printf "${C_CYAN}${C_BOLD}  /  |/  /_  __/ / /_(_)     /  |/  /____ ${C_RESET}\n"
+printf "${C_BLUE}${C_BOLD} / /|_/ / / / / / __/ /_____/ /|_/ / ___/ ${C_RESET}\n"
+printf "${C_BLUE}${C_BOLD}/ /  / / /_/ / / /_/ /_____/ /  / / /__   ${C_RESET}\n"
+printf "${C_MAGENTA}${C_BOLD}/_/  /_/\\__,_/_/\\__/_/     /_/  /_/\\___/   ${C_RESET}\n"
+printf "${C_YELLOW}${C_BOLD}  » Universal Minecraft Server Runtime${C_RESET}\n"
+printf "${C_DIM}    By PotenFYR Studios • support@potenfyr.in${C_RESET}\n\n"
 
-printf '%b' "${BANNER}"
-printf '\n'
-printf "${C_YELLOW}${C_DIM}%*s${C_RESET}\n" 176 "- By PotenFYR Studios"
-printf "${C_CYAN}${C_BOLD}%s${C_RESET}\n" "$(printf '%*s' 176 '' | tr ' ' '=')"
-printf "${C_GREEN}%-22s${C_RESET} %s\n" "Server type:"  "${SERVER_TYPE:-vanilla}"
-printf "${C_GREEN}%-22s${C_RESET} %s\n" "MC version:"   "${MINECRAFT_VERSION:-latest}"
+DIVIDER=$(printf '%*s' 62 '' | tr ' ' '=')
+printf "${C_CYAN}${C_BOLD}%s${C_RESET}\n" "${DIVIDER}"
+printf "  ${C_GREEN}${C_BOLD}%-18s:${C_RESET} %s\n" "Server Software" "${SERVER_TYPE:-vanilla} (${MINECRAFT_VERSION:-latest})"
 if [ -n "${JAVA_SELECTED}" ]; then
-    printf "${C_GREEN}%-22s${C_RESET} %s (%s)\n" "Java:" "${JAVA_SELECTED}" "${JAVA_HOME}"
-    "${JAVA_HOME}/bin/java" -version 2>&1 | head -n1 | sed 's/^/                      /'
+    JAVA_VER_SHORT=$("${JAVA_HOME}/bin/java" -version 2>&1 | head -n1 | tr -d '\r\n')
+    printf "  ${C_GREEN}${C_BOLD}%-18s:${C_RESET} %s (%s)\n" "Java Runtime" "${JAVA_SELECTED}" "${JAVA_VER_SHORT}"
 else
-    printf "${C_GREEN}%-22s${C_RESET} %s\n" "Java:" "not required for this server type"
+    printf "  ${C_GREEN}${C_BOLD}%-18s:${C_RESET} %s\n" "Runtime" "Native / Non-Java runtime"
 fi
-printf "${C_GREEN}%-22s${C_RESET} %sM\n" "Memory:" "${SERVER_MEMORY:-1024}"
-printf "${C_GREEN}%-22s${C_RESET} %s\n" "Server jar:" "${SERVER_JARFILE:-server.jar}"
-printf "${C_GREEN}%-22s${C_RESET} %s\n" "IP / port:" "${INTERNAL_IP}:${SERVER_PORT:-25565}"
-printf "${C_CYAN}${C_BOLD}%s${C_RESET}\n" "$(printf '%*s' 176 '' | tr ' ' '=')"
-printf "${C_DIM}Tip: tune performance via JAVA_FLAGS / GC_TYPE, pass server args via EXTRA_ARGS,\n"
-printf "     and install from any GitHub release with SERVER_TYPE=github.${C_RESET}\n"
+printf "  ${C_GREEN}${C_BOLD}%-18s:${C_RESET} %s MB\n" "Memory Allocated" "${SERVER_MEMORY:-1024}"
+printf "  ${C_GREEN}${C_BOLD}%-18s:${C_RESET} %s\n" "Network Address" "${INTERNAL_IP}:${SERVER_PORT:-25565}"
+printf "  ${C_GREEN}${C_BOLD}%-18s:${C_RESET} %s\n" "Target Jarfile" "${SERVER_JARFILE:-server.jar}"
+printf "${C_CYAN}${C_BOLD}%s${C_RESET}\n" "${DIVIDER}"
+printf "${C_DIM}Tip: customize flags via JAVA_FLAGS or install via SERVER_TYPE=github.${C_RESET}\n\n"
 
 # ---------------------------------------------------------------------------
 # Startup command evaluation (yolks-compatible)
