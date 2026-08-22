@@ -66,7 +66,7 @@ MMM  M'  "MMM MMM   MMM     YM  """"YUMMM   "YUMMMMMP"  MMMM   "W"   YMM   ""`  
 | **Updates** | `AUTO_UPDATE` (reinstall policy) + `KEEP_BACKUP` (keep previous jar) |
 | **Storage safe** | Atomic downloads, install artifacts cleaned, old jars removed by default |
 | **Multi-arch** | Images published for `linux/amd64` and `linux/arm64` |
-| **Future-proof** | Year-based versioning (26.1, 26.2, …) supported; new Java releases only require a new image tag |
+| **Future-proof** | Year-based versioning (26.1, 26.2, ...) supported; new Java releases only require a new image tag |
 
 ---
 
@@ -203,7 +203,7 @@ Pterodactyl panel ──► Wings (node)
                           │ 3. dispatches:
                           │    bedrock    → ./bedrock_server
                           │    pocketmine → php PocketMine-MP.phar --no-wizard
-                          │    proxies    → java … -jar …  ("stop"→"end")
+                          │    proxies    → java ... -jar ...  ("stop"→"end")
                           │    java types → java [Aikar G1GC] -jar server.jar
                           │                 (+ @unix_args.txt for Forge/NeoForge)
                           ▼
@@ -296,7 +296,7 @@ WORLD_URL        = https://www.planetminecraft.com/.../world.zip
 `WORLD_URL` unpacks the world into `./world` - a fully preconfigured server
 in one install.
 
-### Install software that only exists on GitHub (e.g. Arclight, Feather, …)
+### Install software that only exists on GitHub (e.g. Arclight, Feather, ...)
 ```
 SERVER_TYPE      = github
 GITHUB_REPO      = IzzelAliz/Arclight
@@ -332,7 +332,7 @@ the built-in launcher (all variables remain available).
 
 ---
 
-## Crossplay & plugin guide (Geyser, ViaVersion, …)
+## Crossplay & plugin guide (Geyser, ViaVersion, ...)
 
 Java and Bedrock players can play together on one server with **Geyser**,
 and clients of any Minecraft version can join with **ViaVersion**:
@@ -387,8 +387,8 @@ archives are unwrapped). Worlds are only imported on **fresh** installs; a
 
 ### Installing plugins, mods and resource packs
 `EXTRA_URLS` downloads files during installation - one `[subdir/]|url` per
-line. Examples: `plugins|https://…/plugin.jar`, `mods|https://…/mod.jar`,
-`config|https://…/config.yml`. Zip files are extracted in place.
+line. Examples: `plugins|https://.../plugin.jar`, `mods|https://.../mod.jar`,
+`config|https://.../config.yml`. Zip files are extracted in place.
 
 ### Debugging
 Set `DEBUG=1` (admin-only variable) to run the install with `bash -x` and to
@@ -413,7 +413,7 @@ Just press Stop - `stop` is sent and translated to `end` for proxies.
   `JAVA_FLAGS` to a single space
 - Server arguments (not JVM flags) go in `EXTRA_ARGS`, e.g. `--nogui`
 - The console prints which flags are active and where they came from
-  (`JVM flags source: JAVA_FLAGS` or `GC_TYPE=…`)
+  (`JVM flags source: JAVA_FLAGS` or `GC_TYPE=...`)
 
 ---
 
@@ -421,7 +421,7 @@ Just press Stop - `stop` is sent and translated to `end` for proxies.
 
 ### Building & hosting the image on GHCR
 The workflow [`.github/workflows/docker-image.yml`](.github/workflows/docker-image.yml):
-- builds a **matrix** (`java8 … java26` + `all`) for `amd64` + `arm64`
+- builds a **matrix** (`java8 ... java26` + `all`) for `amd64` + `arm64`
 - pushes `latest`, `java<X>`, and per-commit tags to
   `ghcr.io/potenfyr-studios/minecraft-eggs`
 - runs on push to `main`, on `v*` tags, on PRs (build-only) and manually
