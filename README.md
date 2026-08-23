@@ -34,23 +34,23 @@ automatic.
 5. [Egg variable reference](#egg-variable-reference)
 6. [Examples cookbook](#examples-cookbook)
 7. [Updating servers safely](#updating-servers-safely)
+   - [Safe type and version switching](#safe-type-and-version-switching)
 8. [Java guide](#java-guide)
 9. [Performance tuning](#performance-tuning)
 
 **Reliability**
-10. [Safe type and version switching](#safe-type-and-version-switching)
-11. [Error logs and diagnostics](#error-logs-and-diagnostics)
-12. [Troubleshooting matrix](#troubleshooting-matrix)
+10. [Error logs and diagnostics](#error-logs-and-diagnostics)
+11. [Troubleshooting matrix](#troubleshooting-matrix)
 
 **Expert**
-13. [How it works](#how-it-works)
-14. [Architecture and host OS support](#architecture-and-host-os-support)
-15. [Panel compatibility](#panel-compatibility)
-16. [Administrator and production guide](#administrator-and-production-guide)
-17. [Security model](#security-model)
-18. [FAQ](#faq)
-19. [Project layout](#project-layout)
-20. [License and support](#license-and-support)
+12. [How it works](#how-it-works)
+13. [Architecture and host OS support](#architecture-and-host-os-support)
+14. [Panel compatibility](#panel-compatibility)
+15. [Administrator and production guide](#administrator-and-production-guide)
+16. [Security model](#security-model)
+17. [FAQ](#faq)
+18. [Project layout](#project-layout)
+19. [License and support](#license-and-support)
 
 ---
 
