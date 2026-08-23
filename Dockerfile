@@ -81,7 +81,9 @@ RUN if ! ls /opt/java/*/bin/java >/dev/null 2>&1 ; then \
         && rm -rf /var/lib/apt/lists/* ; \
     fi
 
-RUN rm -f /tmp/ptero-arch /usr/local/bin/install-java.sh \
+# Keep install-java.sh available at runtime: the entrypoint uses it to
+# download additional Java runtimes (e.g. JAVA_VERSION=27, GraalVM, custom URLs).
+RUN rm -f /tmp/ptero-arch \
     && mkdir -p /opt/java \
     && chmod -R a+rX /opt/java
 
