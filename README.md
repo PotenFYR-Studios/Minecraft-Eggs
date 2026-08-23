@@ -158,8 +158,6 @@ The image is built and published by GitHub Actions from this repository:
 | Tag | Contents |
 |---|---|
 | `ghcr.io/potenfyr-studios/minecraft-eggs:latest` | **Universal** - Java 8, 11, 17, 21, 25, 26 + dynamic on-demand installer + PHP 8.1 (PocketMine) + native libs (Bedrock) + jq/curl/unzip/git-ready tools |
-| `...:java26` / `:java25` / `:java21` / `:java17` / `:java11` / `:java8` | **Slim** single-JVM variants (smallest footprint) |
-| `...:java<X>-<sha>` | Per-commit builds (rolling) |
 
 Architectures: `linux/amd64` and `linux/arm64`.
 
@@ -169,8 +167,6 @@ Build it yourself:
 # universal
 docker build -t minecraft-eggs:latest .
 
-# slim variant
-docker build --build-arg JAVA_VERSION=21 -t minecraft-eggs:java21 .
 ```
 
 Image contents (deliberately minimal):
@@ -461,7 +457,7 @@ Just press Stop - `stop` is sent and translated to `end` for proxies.
 
 ### Building & hosting the image on GHCR
 The workflow [`.github/workflows/docker-image.yml`](.github/workflows/docker-image.yml):
-- builds a **matrix** (`java8 ... java26` + `all`) for `amd64` + `arm64`
+- builds the single universal image (tag `latest`) for `amd64` + `arm64`
 - pushes `latest`, `java<X>`, and per-commit tags to
   `ghcr.io/potenfyr-studios/minecraft-eggs`
 - runs on push to `main`, on `v*` tags, on PRs (build-only) and manually
@@ -508,7 +504,7 @@ self-update. For stability pin exact versions instead.
 |---|---|
 | GC | Aikar G1GC by default; `GC_TYPE=zgc` for 8 GB+; `JAVA_FLAGS` to override |
 | Java auto-selection | The correct JVM for the version is chosen automatically |
-| Image weight | JREs only (no JDK); slim single-Java tags for minimal footprint |
+| Image weight | JREs only (no JDK); one universal image, no variant sprawl |
 | RAM | `-Xmx` = allocated memory; Aikar flags include `-XX:+AlwaysPreTouch` for consistent latency |
 | Old versions | Legacy servers get Java 8 - no more "unsupported class file version" |
 

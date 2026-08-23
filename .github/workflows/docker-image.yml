@@ -1,4 +1,4 @@
-name: Build & Publish Docker Images
+name: Build & Publish Docker Image
 
 on:
   push:
@@ -14,12 +14,8 @@ env:
 
 jobs:
   build:
-    name: Build (${{ matrix.java }})
+    name: Build & Publish (universal image)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        java: [8, 11, 17, 21, 25, 26, all]
 
     permissions:
       contents: read
@@ -49,9 +45,8 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=${{ matrix.java == 'all' && 'latest' || format('java{0}', matrix.java) }}
-            type=raw,value=${{ matrix.java == 'all' && github.sha || format('java{0}-{1}', matrix.java, github.sha) }},enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=${{ matrix.java == 'all' && 'latest' || format('java{0}', matrix.java) }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
+            type=sha,prefix={{branch}}-,enable=${{ github.ref == 'refs/heads/main' }}
           labels: |
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -64,8 +59,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           platforms: linux/amd64,linux/arm64
           build-args: |
-            JAVA_VERSION=${{ matrix.java }}
+            JAVA_VERSION=all
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.java }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.java }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
