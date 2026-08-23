@@ -48,48 +48,42 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && locale-gen en_US.UTF-8 || true
 
-# Adoptium's binary API uses x64 / aarch64 arch names.
+# Map Docker arch to Adoptium naming; unknown/exotic arches degrade
+# gracefully (distro OpenJDK fallback below guarantees a usable JVM).
 RUN case "${TARGETARCH}" in \
         amd64) echo "x64" > /tmp/ptero-arch ;; \
         arm64) echo "aarch64" > /tmp/ptero-arch ;; \
-        *) echo "Unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+        ppc64le) echo "ppc64le" > /tmp/ptero-arch ;; \
+        s390x) echo "s390x" > /tmp/ptero-arch ;; \
+        riscv64) echo "riscv64" > /tmp/ptero-arch ;; \
+        *) echo "unsupported" > /tmp/ptero-arch ;; \
     esac
 
 COPY install-java.sh /usr/local/bin/install-java.sh
 RUN chmod +x /usr/local/bin/install-java.sh
 
-# Java 8 - required by anything up to 1.16.5 (and nearly every legacy modpack).
-RUN if [ "${JAVA_VERSION}" = "all" ] || [ "${JAVA_VERSION}" = "8" ]; then \
-        install-java.sh 8 "$(cat /tmp/ptero-arch)"; \
+# Install every requested JRE; tolerate vendors/arches where a given runtime
+# does not exist so the image always builds on any architecture.
+RUN arch="$(cat /tmp/ptero-arch)" ; \
+    if [ "${JAVA_VERSION}" = "all" ] ; then wanted="8 11 17 21 25 26" ; else wanted="${JAVA_VERSION}" ; fi ; \
+    for v in ${wanted} ; do \
+        if [ "${arch}" = "unsupported" ] ; then \
+            echo "WARN: skipping JRE ${v} on unsupported architecture" ; \
+            continue ; \
+        fi ; \
+        install-java.sh "${v}" "${arch}" || echo "WARN: JRE ${v} unavailable for ${arch}" ; \
+    done
+
+# Guarantee at least one working JVM even where Adoptium publishes nothing.
+RUN if ! ls /opt/java/*/bin/java >/dev/null 2>&1 ; then \
+        apt-get update \
+        && apt-get install -y --no-install-recommends default-jre-headless \
+        && rm -rf /var/lib/apt/lists/* ; \
     fi
 
-# Java 11 - used by several older Forge / modded environments.
-RUN if [ "${JAVA_VERSION}" = "all" ] || [ "${JAVA_VERSION}" = "11" ]; then \
-        install-java.sh 11 "$(cat /tmp/ptero-arch)"; \
-    fi
-
-# Java 17 - Minecraft 1.17 through 1.20.4 (16 was skipped: no JRE exists and
-# 1.17 runs perfectly on 17).
-RUN if [ "${JAVA_VERSION}" = "all" ] || [ "${JAVA_VERSION}" = "17" ]; then \
-        install-java.sh 17 "$(cat /tmp/ptero-arch)"; \
-    fi
-
-# Java 21 - Minecraft 1.20.5 through 1.21.x (LTS, most common today).
-RUN if [ "${JAVA_VERSION}" = "all" ] || [ "${JAVA_VERSION}" = "21" ]; then \
-        install-java.sh 21 "$(cat /tmp/ptero-arch)"; \
-    fi
-
-# Java 25 - LTS runtime.
-RUN if [ "${JAVA_VERSION}" = "all" ] || [ "${JAVA_VERSION}" = "25" ]; then \
-        install-java.sh 25 "$(cat /tmp/ptero-arch)"; \
-    fi
-
-# Java 26 - latest release runtime.
-RUN if [ "${JAVA_VERSION}" = "all" ] || [ "${JAVA_VERSION}" = "26" ]; then \
-        install-java.sh 26 "$(cat /tmp/ptero-arch)"; \
-    fi
-
-RUN rm -f /tmp/ptero-arch && mkdir -p /opt/java && chmod -R 777 /opt/java
+RUN rm -f /tmp/ptero-arch /usr/local/bin/install-java.sh \
+    && mkdir -p /opt/java \
+    && chmod -R a+rX /opt/java
 
 # Create container user (required by Pterodactyl, Wings, Pelican, Feather Panel)
 RUN useradd -d /home/container -m -s /bin/bash container \

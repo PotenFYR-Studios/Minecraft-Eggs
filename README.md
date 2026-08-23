@@ -535,6 +535,31 @@ self-update. For stability pin exact versions instead.
 
 ---
 
+## Architecture & host OS support
+
+The egg is **host-OS agnostic**: everything runs inside the container, so the
+node (and panel) can be any Linux distribution with Docker - Debian, Ubuntu,
+Rocky, Alpine, Arch, NixOS, etc. The panel itself may even sit on a different
+machine or architecture than the game node.
+
+Supported CPU architectures:
+
+| Architecture | CI-published image | Notes |
+|---|---|---|
+| `linux/amd64` | yes | full support, all runtimes |
+| `linux/arm64` | yes | full support, all runtimes |
+| `linux/ppc64le` | build natively | Adoptium publishes these runtimes |
+| `linux/s390x` | build natively | Adoptium publishes these runtimes |
+| `linux/riscv64` | build natively | newest runtimes only |
+| 32-bit / exotic | build natively | distro OpenJDK fallback is installed automatically |
+
+For architectures outside amd64/arm64, build natively on the host (fast,
+no emulation needed): `docker build -t ghcr.io/potenfyr-studios/minecraft-eggs:latest .`
+The Dockerfile never hard-fails on an unknown architecture: unavailable
+Temurin runtimes are skipped with a warning and a distro `default-jre-headless`
+is installed as a guaranteed fallback. Known vendor limits: Bedrock Dedicated
+Server is x86_64-only (Mojang), and BuildTools needs an x64/aarch64 JDK.
+
 ## Support & Contact
 
 For questions, bug reports, feature requests, or inquiries, reach out to us at:
