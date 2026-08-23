@@ -112,6 +112,21 @@ fail() {
     exit 1
 }
 
+# ---------------------------------------------------------------------------
+# Persistent error logging & traced execution (kept inside the server dir)
+# ---------------------------------------------------------------------------
+ERROR_LOG="${SERVER_DIR}/install-error.log"
+
+log_rotate_file() { # keep the log bounded (~512 KB)
+    local max=524288
+    [ -f "$1" ] || return 0
+    [ "$(wc -c < "$1" 2>/dev/null || echo 0)" -le "$max" ] || mv -f "$1" "$1.old" 2>/dev/null || true
+}
+
+log_event() {
+    printf '[%s] %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*" >> "${ERROR_LOG}" 2>/dev/null || true
+}
+
 PROJECT_TYPE=$(echo "${SERVER_TYPE:-vanilla}" | tr '[:upper:]' '[:lower:]')
 MC_VERSION="${MINECRAFT_VERSION:-latest}"
 BUILD_NUMBER="${BUILD_NUMBER:-latest}"
@@ -157,6 +172,67 @@ download() { # $1 = url, $2 = destination (atomic + cleaned up on failure)
         rm -f "$2"
         fail "Failed to download $1"
     fi
+}
+
+# ---------------------------------------------------------------------------
+# Instance management: switch type/version without ever losing data
+# ---------------------------------------------------------------------------
+INSTANCE_FILE="${SERVER_DIR}/.mc-instance.conf"
+
+instance_get() { # key -> value (plain KEY=VALUE store, zero dependencies)
+    [ -f "${INSTANCE_FILE}" ] || return 1
+    local val
+    val=$(grep -E "^$1=" "${INSTANCE_FILE}" 2>/dev/null | tail -n1 | cut -d= -f2-)
+    [ -n "${val}" ] || return 1
+    printf '%s' "${val}"
+}
+
+instance_set_kv() { # key value : upsert without external tools
+    local k="$1" v="$2" tmp="${INSTANCE_FILE}.tmp"
+    if [ -f "${INSTANCE_FILE}" ]; then
+        awk -v k="${k}" -v v="${v}" \
+            'BEGIN { FS = "="; OFS = "=" }
+             $1 == k { found = 1; print k, v; next }
+             { print }
+             END { if (!found) print k, v }' "${INSTANCE_FILE}" > "${tmp}" \
+            && mv -f "${tmp}" "${INSTANCE_FILE}"
+    else
+        printf '%s=%s\n' "${k}" "${v}" > "${tmp}" && mv -f "${tmp}" "${INSTANCE_FILE}"
+    fi
+}
+
+major_line() { # "1.21.4" -> "1.21", "26.1.2" -> "26.1"; empty for keywords
+    echo "${1:-}" | grep -oE '^[0-9]+\.[0-9]+' || true
+}
+
+archive_previous_instance() {
+    local stamp dest count base f safe_type safe_mc
+    safe_type=$(echo "${PREV_TYPE:-unknown}" | tr -c 'A-Za-z0-9._-' '_' | sed 's/_$//')
+    safe_mc=$(echo "${PREV_MC:-unknown}" | tr -c 'A-Za-z0-9._-' '_' | sed 's/_$//')
+    stamp=$(date +%Y%m%d-%H%M%S)
+    dest="${SERVER_DIR}/archive/${safe_type}-${safe_mc}-${stamp}"
+    if ! mkdir -p "${dest}" 2>/dev/null; then
+        warn "Could not create archive folder '${dest}'; keeping previous files in place"
+        return 0
+    fi
+    count=0
+    shopt -s dotglob nullglob
+    for f in "${SERVER_DIR}"/*; do
+        base=$(basename "${f}")
+        case "${base}" in
+            archive|.mc-instance.conf|.multi-mc.conf|.gitkeep) continue ;;
+        esac
+        if mv -f -- "${f}" "${dest}/" 2>/dev/null; then
+            count=$((count + 1))
+        fi
+    done
+    shopt -u dotglob nullglob
+    warn "Breaking change detected: ${ARCHIVE_REASON}"
+    warn "Your previous server data was NOT deleted."
+    ok   "Archived ${count} item(s) to: archive/${safe_type}-${safe_mc}-${stamp}"
+    log  "The new ${PROJECT_TYPE} ${MC_VERSION} server was installed fresh beside it."
+    log  "Review the archive/ folder in the panel File Manager (or SFTP) and delete"
+    log  "it manually once you no longer need the old files."
 }
 
 # ---------------------------------------------------------------------------
@@ -898,91 +974,216 @@ if [ "${SHOW_VERSIONS}" = "1" ]; then
     show_versions
 fi
 
-# A custom download URL bypasses all project logic for Java server types.
-if [ -n "${DL_URL:-}" ] && [ "${PROJECT_TYPE}" != "custom" ] \
-    && [ "${PROJECT_TYPE}" != "bedrock" ] && [ "${PROJECT_TYPE}" != "pocketmine" ]; then
-    log "Using custom download URL (bypassing ${PROJECT_TYPE} project logic)"
-    download "${DL_URL}" "${JARFILE}"
+run_install() {
+
+    # --- normalize version keywords: latest / stable / snapshot / alpha ... ---
+    case "$(echo "${MC_VERSION}" | tr '[:upper:]' '[:lower:]')" in
+        latest|stable|release|ga|production)
+            MC_VERSION="latest"
+            ;;
+        snapshot|alpha|beta|experimental|nightly|preview|dev)
+            MC_VERSION="latest-snapshot"
+            ;;
+    esac
+    case "${MC_VERSION}" in
+        latest|latest-snapshot) ;;
+        *)
+            if ! echo "${MC_VERSION}" | grep -qE '^[A-Za-z0-9._-]+$'; then
+                warn "'${MC_VERSION}' is not a valid version identifier; falling back to latest"
+                MC_VERSION="latest"
+            fi
+            ;;
+    esac
+
+    # --- instance change detection: never lose data on type/version switches ---
+    PREV_TYPE=$(instance_get type)
+    PREV_MC=$(instance_get mc_version)
+    PREV_RESOLVED=$(instance_get resolved_version)
+    ARCHIVE_REASON=""
+    local archive_needed=0
+    if [ -n "${PREV_TYPE}" ]; then
+        if [ "${PREV_TYPE}" != "${PROJECT_TYPE}" ]; then
+            archive_needed=1
+            ARCHIVE_REASON="server type changed (${PREV_TYPE} -> ${PROJECT_TYPE})"
+        else
+            local pline cline
+            pline=$(major_line "${PREV_RESOLVED}")
+            [ -z "${pline}" ] && pline=$(major_line "${PREV_MC}")
+            cline=$(major_line "${MC_VERSION}")
+            if [ -n "${pline}" ] && [ -n "${cline}" ] && [ "${pline}" != "${cline}" ]; then
+                archive_needed=1
+                ARCHIVE_REASON="minecraft major version line changed (${pline}.x -> ${cline}.x)"
+            elif [ -n "${PREV_MC}" ] && [ "${PREV_MC}" != "${MC_VERSION}" ] && { [ "${MC_VERSION}" = "latest-snapshot" ] || [ "${PREV_MC}" = "latest-snapshot" ]; }; then
+                archive_needed=1
+                ARCHIVE_REASON="snapshot channel switched (${PREV_MC} -> ${MC_VERSION})"
+            fi
+        fi
+    fi
+    if [ "${archive_needed}" = "1" ]; then
+        archive_previous_instance
+    else
+        [ -n "${PREV_TYPE}" ] && log "No breaking changes detected - existing worlds/configs are kept as-is"
+    fi
+
+    # --- AUTO_UPDATE=0: do nothing when the server files are already present ---
+    if [ "${AUTO_UPDATE}" = "0" ]; then
+        local target="${JARFILE}"
+        case "${PROJECT_TYPE}" in
+            bedrock) target="bedrock_server" ;;
+            pocketmine) target="PocketMine-MP.phar" ;;
+        esac
+        if [ -f "${SERVER_DIR}/${target}" ]; then
+            ok "AUTO_UPDATE=0 and '${target}' already present - skipping installation"
+            exit 0
+        fi
+        log "AUTO_UPDATE=0 but '${target}' is missing - performing first installation"
+    fi
+
+    # A custom download URL bypasses all project logic for Java server types.
+    if [ -n "${DL_URL:-}" ] && [ "${PROJECT_TYPE}" != "custom" ] \
+        && [ "${PROJECT_TYPE}" != "bedrock" ] && [ "${PROJECT_TYPE}" != "pocketmine" ]; then
+        log "Using custom download URL (bypassing ${PROJECT_TYPE} project logic)"
+        download "${DL_URL}" "${JARFILE}"
+        exit 0
+    fi
+
+    case "${PROJECT_TYPE}" in
+        vanilla)     install_vanilla ;;
+        paper)       install_papermc "paper" ;;
+        folia)       install_papermc "folia" ;;
+        purpur)      install_purpur ;;
+        spigot)      install_spigot ;;
+        forge)       install_forge ;;
+        neoforge)    install_neoforge ;;
+        fabric)      install_fabric ;;
+        quilt)       install_quilt ;;
+        mohist)      install_mohist ;;
+        magma)       install_magma ;;
+        bungeecord)  install_bungeecord ;;
+        waterfall)   install_waterfall ;;
+        velocity)    install_velocity ;;
+        bedrock)     install_bedrock ;;
+        nukkit)      install_nukkit ;;
+        pocketmine)  install_pocketmine ;;
+        github)      install_github ;;
+        custom)
+            if [ -n "${DL_URL:-}" ]; then
+                log "Downloading custom server files from DL_URL"
+                case "${DL_URL}" in
+                    *.zip)
+                        curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" -o /tmp/custom.zip "${DL_URL}" || fail "Failed to download custom zip"
+                        unzip -o /tmp/custom.zip -d "${SERVER_DIR}" > /dev/null 2>&1
+                        rm -f /tmp/custom.zip
+                        local jar
+                        jar=$(ls *.jar 2>/dev/null | grep -v "${JARFILE}" | head -n1)
+                        if [ -n "${jar}" ] && [ ! -f "${JARFILE}" ]; then
+                            mv "${jar}" "${JARFILE}"
+                        fi
+                        log "Extracted custom zip archive"
+                        ;;
+                    *.tar.gz | *.tgz)
+                        curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" -o /tmp/custom.tar.gz "${DL_URL}" || fail "Failed to download custom tar.gz"
+                        tar -xzf /tmp/custom.tar.gz -C "${SERVER_DIR}" > /dev/null 2>&1
+                        rm -f /tmp/custom.tar.gz
+                        local jar
+                        jar=$(ls *.jar 2>/dev/null | grep -v "${JARFILE}" | head -n1)
+                        if [ -n "${jar}" ] && [ ! -f "${JARFILE}" ]; then
+                            mv "${jar}" "${JARFILE}"
+                        fi
+                        log "Extracted custom tar.gz archive"
+                        ;;
+                    *)
+                        download "${DL_URL}" "${JARFILE}"
+                        ;;
+                esac
+            else
+                log "Custom server type: nothing to download (set DL_URL or upload your own files)"
+            fi
+            ;;
+        *) fail "Unknown server type: ${PROJECT_TYPE}" ;;
+    esac
+
+    # Ensure a server.properties exists for Java servers so the panel can
+    # configure the port automatically (proxies/BDS generate their own files).
+    case "${PROJECT_TYPE}" in
+        paper|folia|purpur|spigot|forge|neoforge|fabric|quilt|mohist|magma|nukkit|github|custom)
+            ensure_server_properties ;;
+    esac
+
+    # Extra files (plugins, configs, resource packs, ...) and world import.
+    install_extra_urls
+    install_world
+
+    # Record the installed instance so future type/version switches are safe.
+    instance_set_kv type "${PROJECT_TYPE}"
+    instance_set_kv mc_version "${MC_VERSION}"
+    [ -n "${RESOLVED_VERSION}" ] && instance_set_kv resolved_version "${RESOLVED_VERSION}"
+    instance_set_kv java "$(java_for_mc "${MC_VERSION}")"
+    instance_set_kv updated "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+
+    echo "-----------------------------------------"
+    echo -e "\033[1m\033[32mInstallation completed successfully\033[0m"
+    echo "-----------------------------------------"
+    echo -e "\033[36m  Server type :\033[0m ${PROJECT_TYPE}"
+    [ -n "${RESOLVED_VERSION}" ] && echo -e "\033[36m  Version     :\033[0m ${RESOLVED_VERSION}"
+    echo -e "\033[36m  Java        :\033[0m $(java_for_mc "${MC_VERSION}") (auto-selected at runtime)"
+    echo -e "\033[36m  Jar file    :\033[0m ${JARFILE}"
+    echo "-----------------------------------------"
+    echo -e "\033[1;33mNext steps:\033[0m"
+    echo "  1. Start the server in the panel and accept the EULA when prompted."
+    echo "  2. Players connect to: ${SERVER_IP:-<node IP>}:${SERVER_PORT:-25565}"
+    echo "  3. Change settings in the panel (Variables) and press Reinstall to update."
+    echo -e "\033[2;37m  Full installer trace: install-error.log (crash history: error.log)\033[0m"
+    echo "-----------------------------------------"
+}
+
+# ---------------------------------------------------------------------------
+# Traced execution: a full xtrace of every step is written to
+# install-error.log. On failure the console prints a report plus the last
+# trace lines, so troubleshooting never requires re-running with DEBUG.
+# ---------------------------------------------------------------------------
+ERROR_LOG="${SERVER_DIR}/install-error.log"
+
+log_rotate_file() { # keep the log bounded (~512 KB)
+    local max=524288
+    [ -f "$1" ] || return 0
+    [ "$(wc -c < "$1" 2>/dev/null || echo 0)" -le "$max" ] || mv -f "$1" "$1.old" 2>/dev/null || true
+}
+
+log_event() {
+    printf '[%s] %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*" >> "${ERROR_LOG}" 2>/dev/null || true
+}
+
+log_rotate_file "${ERROR_LOG}"
+log_event "=== install started: type=${PROJECT_TYPE} mc=${MC_VERSION} build=${BUILD_NUMBER} loader=${LOADER_VERSION} auto_update=${AUTO_UPDATE} ==="
+
+if [ "${DEBUG:-0}" != "1" ]; then
+    exec {MMC_TRACE_FD}>>"${ERROR_LOG}"
+    BASH_XTRACEFD="${MMC_TRACE_FD}"
+    PS4='+[${EPOCHREALTIME:-$SECONDS}] ${BASH_SOURCE##*/}:${LINENO} ${FUNCNAME[0]:-main}(): '
+    set -x
+fi
+
+( run_install )
+STATUS=$?
+if [ "${DEBUG:-0}" != "1" ]; then
+    set +x 2>/dev/null || true
+fi
+
+if [ "${STATUS}" -eq 0 ]; then
+    log_event "=== install finished successfully ==="
     exit 0
 fi
 
-case "${PROJECT_TYPE}" in
-    vanilla)     install_vanilla ;;
-    paper)       install_papermc "paper" ;;
-    folia)       install_papermc "folia" ;;
-    purpur)      install_purpur ;;
-    spigot)      install_spigot ;;
-    forge)       install_forge ;;
-    neoforge)    install_neoforge ;;
-    fabric)      install_fabric ;;
-    quilt)       install_quilt ;;
-    mohist)      install_mohist ;;
-    magma)       install_magma ;;
-    bungeecord)  install_bungeecord ;;
-    waterfall)   install_waterfall ;;
-    velocity)    install_velocity ;;
-    bedrock)     install_bedrock ;;
-    nukkit)      install_nukkit ;;
-    pocketmine)  install_pocketmine ;;
-    github)      install_github ;;
-    custom)
-        if [ -n "${DL_URL:-}" ]; then
-            log "Downloading custom server files from DL_URL"
-            case "${DL_URL}" in
-                *.zip)
-                    curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" -o /tmp/custom.zip "${DL_URL}" || fail "Failed to download custom zip"
-                    unzip -o /tmp/custom.zip -d "${SERVER_DIR}" > /dev/null 2>&1
-                    rm -f /tmp/custom.zip
-                    local jar
-                    jar=$(ls *.jar 2>/dev/null | grep -v "${JARFILE}" | head -n1)
-                    if [ -n "${jar}" ] && [ ! -f "${JARFILE}" ]; then
-                        mv "${jar}" "${JARFILE}"
-                    fi
-                    log "Extracted custom zip archive"
-                    ;;
-                *.tar.gz | *.tgz)
-                    curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" -o /tmp/custom.tar.gz "${DL_URL}" || fail "Failed to download custom tar.gz"
-                    tar -xzf /tmp/custom.tar.gz -C "${SERVER_DIR}" > /dev/null 2>&1
-                    rm -f /tmp/custom.tar.gz
-                    local jar
-                    jar=$(ls *.jar 2>/dev/null | grep -v "${JARFILE}" | head -n1)
-                    if [ -n "${jar}" ] && [ ! -f "${JARFILE}" ]; then
-                        mv "${jar}" "${JARFILE}"
-                    fi
-                    log "Extracted custom tar.gz archive"
-                    ;;
-                *)
-                    download "${DL_URL}" "${JARFILE}"
-                    ;;
-            esac
-        else
-            log "Custom server type: nothing to download (set DL_URL or upload your own files)"
-        fi
-        ;;
-    *) fail "Unknown server type: ${PROJECT_TYPE}" ;;
-esac
-
-# Ensure a server.properties exists for Java servers so the panel can
-# configure the port automatically (proxies/BDS generate their own files).
-case "${PROJECT_TYPE}" in
-    paper|folia|purpur|spigot|forge|neoforge|fabric|quilt|mohist|magma|nukkit|github|custom)
-        ensure_server_properties ;;
-esac
-
-# Extra files (plugins, configs, resource packs, ...) and world import.
-install_extra_urls
-install_world
-
-echo "-----------------------------------------"
-echo -e "\033[1m\033[32mInstallation completed successfully\033[0m"
-echo "-----------------------------------------"
-echo -e "\033[36m  Server type :\033[0m ${PROJECT_TYPE}"
-[ -n "${RESOLVED_VERSION}" ] && echo -e "\033[36m  Version     :\033[0m ${RESOLVED_VERSION}"
-echo -e "\033[36m  Java        :\033[0m $(java_for_mc "${MC_VERSION}") (auto-selected at runtime)"
-echo -e "\033[36m  Jar file    :\033[0m ${JARFILE}"
-echo "-----------------------------------------"
-echo -e "\033[1m\033[33mNext steps:\033[0m"
-echo "  1. Start the server in the panel and accept the EULA when prompted."
-echo "  2. Players connect to: ${SERVER_IP:-<node IP>}:${SERVER_PORT:-25565}"
-echo "  3. Change settings in the panel (Variables) and press Reinstall to update."
-echo "-----------------------------------------"
+log_event "=== install FAILED (exit ${STATUS}) ==="
+echo ""
+echo -e "\033[1;31m==============================================================\033[0m"
+echo -e "\033[1;31m  INSTALLATION FAILED (exit code: ${STATUS})\033[0m"
+echo -e "\033[1;31m==============================================================\033[0m"
+echo -e "  \033[1;33mFull execution trace saved to:\033[0m ${ERROR_LOG}"
+echo -e "\033[2;37m--------------------------------------------------------------\033[0m"
+tail -n 40 "${ERROR_LOG}" 2>/dev/null | sed 's/^/  /'
+echo -e "\033[2;37m--------------------------------------------------------------\033[0m"
+echo -e "  \033[1;33mTips: set SHOW_VERSIONS=1 to list valid versions for\033[0m"
+echo -e "  \033[1;33m'${PROJECT_TYPE}', or DEBUG=1 for console-level tracing.\033[0m"
+exit "${STATUS}"
