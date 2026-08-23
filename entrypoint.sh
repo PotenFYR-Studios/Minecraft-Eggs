@@ -185,7 +185,7 @@ detect_java_home() {
             fi
         done
 
-        # If not present, download on-demand (e.g. graalvm-21, corretto-21, 27, 28, 16)
+        # If not present, download on-demand (e.g. graalvm-21, corretto-21, 27, 28)
         if command -v install-java.sh >/dev/null 2>&1; then
             log "Java runtime '${JAVA_VERSION}' requested but not present; downloading..."
             install-java.sh "${JAVA_VERSION}" >&2 || true

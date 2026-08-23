@@ -51,6 +51,17 @@ else
 fi
 SERVER_DIR="$(pwd)"
 
+# ---------------------------------------------------------------------------
+# Persistent launcher logging (launch events + crash history for support)
+# ---------------------------------------------------------------------------
+ERROR_LOG="${SERVER_DIR}/error.log"
+
+elog() { printf '[%s] %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*" >> "${ERROR_LOG}" 2>/dev/null || true; }
+
+if [ -f "${ERROR_LOG}" ] && [ "$(wc -c < "${ERROR_LOG}" 2>/dev/null || echo 0)" -gt 524288 ]; then
+    mv -f "${ERROR_LOG}" "${ERROR_LOG}.old" 2>/dev/null || true
+fi
+
 # Ensure Java runtime is in PATH even if run.sh is invoked directly
 if ! command -v java >/dev/null 2>&1; then
     for cand in /opt/java/*/bin/java ~/.java/*/bin/java ./java/bin/java; do
@@ -109,6 +120,9 @@ is_valid_type() { case " ${VALID_TYPES} " in *" $1 "*) return 0 ;; *) return 1 ;
 # Validation & defaults (auto-fill empty values)
 # ---------------------------------------------------------------------------
 TYPE=$(echo "${SERVER_TYPE:-vanilla}" | tr '[:upper:]' '[:lower:]')
+
+elog "=== launch: type=${TYPE} mc=${MINECRAFT_VERSION:-latest} mem=${SERVER_MEMORY:-1024} java=${JAVA_VERSION:-auto} ==="
+trap 'ec=$?; [ "${ec}" -ne 0 ] && elog "launcher terminated abnormally (code ${ec})"; exit ${ec}' EXIT
 [ -z "${TYPE}" ] && TYPE="vanilla"
 
 if ! is_valid_type "${TYPE}"; then
@@ -318,7 +332,7 @@ print_crash_diagnostics() {
     printf "  1. Inspect full log output above for specific mod/plugin incompatibilities.\n"
     printf "  2. If Java version mismatch occurs, select compatible JAVA_VERSION in panel Variables.\n"
     printf "  3. Trigger 'Reinstall Server' if server files or libraries are corrupted.\n"
-    printf "${C_RED}${C_BOLD}%s${C_RESET}\n\n" "${divider}"
+printf "  4. Full launcher/crash history is saved in error.log (panel File Manager).\n"    printf "${C_RED}${C_BOLD}%s${C_RESET}\n\n" "${divider}"
 }
 
 # BungeeCord-family proxies stop with "end" instead of "stop". Translate the
@@ -338,8 +352,18 @@ case "${TYPE}" in
 esac
 
 if [ ${EXIT_STATUS} -ne 0 ] && [ ${EXIT_STATUS} -ne 130 ] && [ ${EXIT_STATUS} -ne 143 ]; then
+    elog "=== CRASH: exit=${EXIT_STATUS} type=${TYPE} mc=${MINECRAFT_VERSION:-latest} ==="
+    elog "java=$(java -version 2>&1 | head -n1) | flags_source=${FLAGS_SOURCE:-JAVA_FLAGS} mem=${SERVER_MEMORY:-1024}"
+    elog "command=${JAVA_CMD}"
+    [ -f eula.txt ] && elog "eula: $(grep -i '^eula' eula.txt 2>/dev/null | head -n1)"
+    if [ -f logs/latest.log ]; then
+        elog "--- last errors from logs/latest.log ---"
+        grep -iE '(error|exception|fatal|failed)' logs/latest.log 2>/dev/null | tail -n20 >> "${ERROR_LOG}" 2>/dev/null || true
+    fi
     print_crash_diagnostics "${EXIT_STATUS}"
-    sleep 5
+    elog "--- end crash diagnostics ---"
+else
+    elog "=== server process exited cleanly (code ${EXIT_STATUS}) ==="
 fi
 
 exit ${EXIT_STATUS}

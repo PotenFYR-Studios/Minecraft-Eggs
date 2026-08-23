@@ -391,6 +391,45 @@ archives are unwrapped). Worlds are only imported on **fresh** installs; a
 line. Examples: `plugins|https://.../plugin.jar`, `mods|https://.../mod.jar`,
 `config|https://.../config.yml`. Zip files are extracted in place.
 
+### Safe type / version switching (instance archiving)
+Changing SERVER_TYPE or jumping across major Minecraft versions is treated as
+a **breaking change**. On the next Reinstall the previous server files are
+**archived, never deleted**, into:
+
+```
+archive/<old-type>-<old-version>-<timestamp>/
+```
+
+The new server is installed fresh beside it and the console tells you exactly
+where the old data went. Review `archive/` in the panel File Manager (or SFTP)
+and delete old folders manually when you no longer need them. Same-line updates
+(e.g. 1.21.1 -> 1.21.4 on the same type) are done **in place**: worlds,
+configs and plugins stay untouched.
+
+The current instance state is tracked in `.mc-instance.conf` (do not edit).
+
+### Version keywords
+`MINECRAFT_VERSION` accepts keywords as well as exact versions:
+- `latest`, `stable`, `release`, `ga` -> newest stable release
+- `snapshot`, `alpha`, `beta`, `experimental`, `nightly`, `preview` ->
+  newest snapshot (vanilla; other projects fall back to their latest)
+Invalid identifiers fall back to the latest release with a console warning.
+
+### Error logs & tracing
+Two persistent logs live in the server directory for troubleshooting:
+- `install-error.log` - every install run appends a full step-by-step trace
+  (timestamps + function + line). On failure the console prints a report with
+  the last 40 trace lines automatically.
+- `error.log` - launcher history: start/stop events, crashes with exit code,
+  Java version, command line and the last errors from `logs/latest.log`.
+Both rotate at ~512 KB (`*.old`). No re-run with DEBUG needed to get a trace.
+
+### Panel compatibility
+The egg is a standard `PTDL_v2` export and works on both **Pterodactyl 1.x**
+and **Pelican 1.x** (both run Wings-compatible daemons): import it as an egg,
+select any of the published GHCR images, and everything else (variables,
+wizard, archiving, logging) behaves identically. The console prefix adapts to
+the panel that started the container.
 ### Debugging
 Set `DEBUG=1` (admin-only variable) to run the install with `bash -x` and to
 print a full resolved-environment dump at server start.
