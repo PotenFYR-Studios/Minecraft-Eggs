@@ -1,574 +1,625 @@
-# Multi Minecraft - the universal Minecraft egg for Pterodactyl, Pelican, Feather Panel & More
+# Multi Minecraft - the universal Minecraft egg for Pterodactyl & Pelican
 
-> **One egg. Every Minecraft server. Every version. Every panel.**
-> Installs, updates and runs **18 different server software families** - Java
-> and Bedrock - across **every version ever released** (1.0 → 26.x), with full
-> universal compatibility across **Pterodactyl**, **Pelican Panel**, **Feather Panel**,
-> **Wisp**, **Jexactyl**, and other egg-compatible panels.
-
-<p align="center">
-  <a href="https://github.com/PotenFYR-Studios/Minecraft-Eggs/actions"><img src="https://img.shields.io/github/actions/workflow/status/PotenFYR-Studios/Minecraft-Eggs/docker-image.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=Build" alt="Build Status"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-success?style=for-the-badge&logo=opensourceinitiative&logoColor=white" alt="License: MIT"></a>
-  <a href="https://github.com/PotenFYR-Studios/Minecraft-Eggs/pkgs/container/minecraft-eggs"><img src="https://img.shields.io/badge/GHCR-Docker%20Image-blue?style=for-the-badge&logo=docker&logoColor=white" alt="Docker GHCR"></a>
-  <a href="https://github.com/PotenFYR-Studios/Minecraft-Eggs"><img src="https://img.shields.io/badge/Panels-Pterodactyl%20%7C%20Pelican%20%7C%20Feather-9cf?style=for-the-badge&logo=server&logoColor=white" alt="Panels Supported"></a>
-  <a href="https://github.com/PotenFYR-Studios/Minecraft-Eggs"><img src="https://img.shields.io/badge/Java-8%20%7C%2011%20%7C%2017%20%7C%2021%20%7C%2025%20%7C%2026%2B-orange?style=for-the-badge&logo=openjdk&logoColor=white" alt="Java Support"></a>
-</p>
-
-```text
-   __  ___      ____  _       __  ___     
-  /  |/  /_  __/ / /_(_)     /  |/  /____ 
- / /|_/ / / / / / __/ /_____/ /|_/ / ___/ 
-/ /  / / /_/ / / /_/ /_____/ /  / / /__   
-/_/  /_/\__,_/_/\__/_/     /_/  /_/\___/   
-  » Universal Minecraft Server Runtime (Java 8-26+ & Bedrock)
-    By PotenFYR Studios • support@potenfyr.in
 ```
+█▄▀█▄ ▄█▄  ▄▄▄ █▄▀█▄   ▄▄▄▄  ▄▄▄▄ █▄▄▀▀▄   ▄▀▀▄   ▄▀▄▄ █▄▄▀▀▄▄      █▄▀█▄ ▄█▄  █▄▄  ▄▄█ ▄▄    █▄▄▀▀▄▄ ▄▄▄  ▄▄▄▄  ▄▄▄▄   ▄▄▄▄ 
+▓█  █▄▌ █▄  ▀█ ▓█  █▄ ▄█ ▀▀ ▄█ ▀▀  ██  █▄ ▓█  █▄ ▄█      █▄         ▓█  █▄▌ █▄  ██  ██  ██      █▄     ▀█ ▄█ ▀▀ ▄█ ▀▀  ▄█ ▀▀ 
+██  ██  ██ ▄█▄ ██  ██ ██    ██     ██  █▀ ██  ██ ██      ██         ██  ██  ██  ██  ██  ██      ██    ▄█▄ ██    ██     ██    
+██  ██  ██  ██ ██  ██ ▓▓▄▄  ▓▓     ██▄▄▀  ██▀▀██ ████    ▒▒         ██  ██  ██  ██  ▒▒  ▓▓      ▒▒     ██ ▓▓▄▄  ▓▓▐▀██ ▓▓▐▀██
+▓▓  ▓▓  ▓▓  ▓▓ ▓▓  ▓▓ ▓▓    ▓▓     ▓▓  ▄▄ ▓▓  ▓▓ ▓▓      ▓▓         ▓▓  ▓▓  ▓▓  ▓▓  ▓▓  ▓▓      ▓▓     ▓▓ ▓▓    ▓▓  ▄▄ ▓▓  ▄▄
+██  ▀█  ██ ▄██ ██  ██ ▀█    ▀█     ██  ██ ██  ██ ██      ██▄        ██  ▀█  ██  ▀█  █▀  ▀█      ██▄   ▄██ ▀█    ▀█  ▓▓ ▀█  ▓▓
+▀▀      █▀  ▀▀ ▀▀  ██  ▀▀▀   ▀▀▀  ▄▀▀  ▀▀ ▀▀  ██ ▀▀      ▀▀█        ▀▀      █▀   ▀▄▄▀    ▀▀▀    ▀▀█    ▀▀  ▀▀▀   ▀▀▀ ▀  ▀▀▀ ▀
+                                                                                                           - By PotenFYR Studios
+```
+
+**One egg. One docker image. Every Minecraft server. Every version. Any panel.
+Any architecture.**
+
+Multi Minecraft installs and runs 19 families of Minecraft server software,
+Java Edition and Bedrock, across every version ever released (Alpha to 26.x),
+including snapshots, deprecated versions and future releases. You pick two
+variables (`SERVER_TYPE` and `MINECRAFT_VERSION`); everything else is
+automatic.
 
 ---
 
 ## Table of contents
 
-1. [Features](#features)
-2. [Supported server types](#supported-server-types)
-3. [Repository layout](#repository-layout)
-4. [Setup](#setup)
-5. [Docker images (GHCR)](#docker-images-ghcr)
-6. [How it works](#how-it-works)
-7. [Egg variables](#egg-variables)
-8. [Examples](#examples)
-9. [User guide](#user-guide)
-10. [Administrator guide](#administrator-guide)
-11. [Security](#security)
-12. [Performance & memory](#performance--memory)
-13. [Storage efficiency](#storage-efficiency)
-14. [Troubleshooting](#troubleshooting)
-15. [Support & Contact](#support--contact)
-16. [License](#license)
+**Getting started**
+1. [Newbie quick start (5 minutes)](#newbie-quick-start-5-minutes)
+2. [Requirements](#requirements)
+3. [Supported server software](#supported-server-software)
+4. [The console wizard](#the-console-wizard)
+
+**Everyday use**
+5. [Egg variable reference](#egg-variable-reference)
+6. [Examples cookbook](#examples-cookbook)
+7. [Updating servers safely](#updating-servers-safely)
+8. [Java guide](#java-guide)
+9. [Performance tuning](#performance-tuning)
+
+**Reliability**
+10. [Safe type and version switching](#safe-type-and-version-switching)
+11. [Error logs and diagnostics](#error-logs-and-diagnostics)
+12. [Troubleshooting matrix](#troubleshooting-matrix)
+
+**Expert**
+13. [How it works](#how-it-works)
+14. [Architecture and host OS support](#architecture-and-host-os-support)
+15. [Panel compatibility](#panel-compatibility)
+16. [Administrator and production guide](#administrator-and-production-guide)
+17. [Security model](#security-model)
+18. [FAQ](#faq)
+19. [Project layout](#project-layout)
+20. [License and support](#license-and-support)
 
 ---
 
-## Features
+## Newbie quick start (5 minutes)
 
-| Feature | Details |
+Never used Pterodactyl eggs before? Follow exactly these steps.
+
+### Step 1: Download the egg
+
+Download [`egg-minecraft-multi.json`](egg-minecraft-multi.json) to your computer.
+
+### Step 2: Import it into your panel
+
+1. Log in to your panel as an **administrator**.
+2. Open **Admin Area -> Nests** (Pelican: **Admin -> Nests**).
+3. If there is no Minecraft nest yet, create one named `Minecraft`.
+4. Open the nest and click **Import Egg** (Pelican: **Upload Egg**).
+5. Choose `egg-minecraft-multi.json` and save.
+
+### Step 3: Create a server
+
+1. Go to **Admin -> Servers -> Create New**.
+2. Pick the owner user, the **Minecraft** nest and the **Multi Minecraft** egg.
+3. For **Docker Image** select `Universal (Auto Java)` - this is the only image
+   the egg needs.
+4. Give the server **2048 MB memory** (4096+ for modpacks) and 5 GB+ disk.
+5. Keep the default port allocation (`25565`).
+
+### Step 4: Choose what to install
+
+Open the server's **Startup** tab and set:
+
+| Variable | Example |
 |---|---|
-| **Universal Panel Support** | 100% compatible with **Pterodactyl** (v0.7, v1.x, v2.x), **Pelican Panel**, **Feather Panel**, **Wisp**, **Jexactyl**, **PufferPanel**, and all egg-compatible managers |
-| **All Server Software** | One egg + one Docker image runs Vanilla, Paper, Spigot, Purpur, Folia, Forge, NeoForge, Fabric, Quilt, Mohist, Magma, BungeeCord, Velocity, Waterfall, Bedrock, Nukkit, PocketMine-MP, GitHub releases and custom jars |
-| **Every version** | Full version history per project (Mojang manifest covers 1.0 → 26.x); `latest`, pinned versions, and vanilla `latest-snapshot` |
-| **Auto-Java & Custom JVMs** | The image ships **Java 8, 11, 17, 21, 25 and 26** with dynamic on-demand installation for future (27+), snapshot/EA, beta, alpha, obsolete, and **custom Java runtimes** (GraalVM, Corretto, Zulu, Semeru/OpenJ9, or any direct URL / local `./java` folder) |
-| **Interactive first run** | If a required setting is missing/invalid, the console **asks the user** and saves the answer in `.multi-mc.conf` for every later start |
-| **Performance tuned** | Aikar's G1GC flags by default; `GC_TYPE` (auto/g1gc/zgc/parallel) and full `JAVA_FLAGS` override |
-| **One stop command** | `stop` works for every type - proxies (BungeeCord/Waterfall/Velocity) get it translated to `end` automatically |
-| **Panel-managed ports** | `server.properties`, BungeeCord/Waterfall `config.yml` and `velocity.toml` are patched with the allocation port automatically |
-| **Customizable** | 28 egg variables (see [table](#egg-variables)); plus a `run.custom.sh` escape hatch for anything exotic |
-| **GitHub installs** | Install any server jar published as a GitHub release (`owner/repo`, tag, asset filter) |
-| **Version explorer** | `SHOW_VERSIONS=1` prints every available version of a project without touching the server |
-| **Plugins & worlds** | `EXTRA_URLS` installs plugins/configs/mods at install; `WORLD_URL` imports an existing world |
-| **Updates** | `AUTO_UPDATE` (reinstall policy) + `KEEP_BACKUP` (keep previous jar) |
-| **Storage safe** | Atomic downloads, install artifacts cleaned, old jars removed by default |
-| **Multi-arch** | Images published for `linux/amd64` and `linux/arm64` |
-| **Future-proof** | Year-based versioning (26.1, 26.2, ...) supported; new Java releases only require a new image tag |
+| Server Type | `paper` |
+| Minecraft Version | `latest` |
+
+That is the entire configuration. Press **Install** and watch the console:
+it downloads the server, writes safe default configs and prints a summary.
+
+### Step 5: Start and play
+
+Press **Start**, accept the Minecraft **EULA** checkbox when the panel offers
+it, and players join on your node IP at port `25565`. Done!
+
+> Stuck? The console tells you exactly what to do. If something is missing or
+> misspelled, the server asks you right in the console, remembers your answer,
+> and continues.
 
 ---
 
-## Supported server types
+## Requirements
 
-| `SERVER_TYPE` | What it runs | Versions | API used |
+| Thing | Minimum | Recommended |
+|---|---|---|
+| Panel | Pterodactyl 1.x or Pelican 1.x | latest |
+| Node (wings) OS | any Linux with Docker | any |
+| CPU architecture | x86_64 or arm64 | x86_64 |
+| Memory per server | 1024 MB | 2048-8192 MB |
+| Disk per server | 2 GB | 10 GB+ |
+| Network | outbound HTTPS to Mojang/PaperMC/vendor APIs | - |
+
+---
+
+## Supported server software
+
+All of these install with their complete version history. Unknown versions
+fall back to the latest release automatically, with a warning in console.
+
+| `SERVER_TYPE` | Software | Versions | Source |
 |---|---|---|---|
-| `vanilla` | Official Mojang server | **1.0 → 26.x**, snapshots (`latest-snapshot`) | piston-meta.mojang.com |
-| `paper` | High-performance Paper fork | **1.7 → 26.x** (all builds) | fill.papermc.io v3 |
-| `spigot` | The classic Spigot (built with BuildTools) | **1.8 → 26.x** | hub.spigotmc.org |
-| `purpur` | Feature-rich Purpur fork | **1.14.1 → 26.2** (all builds) | api.purpurmc.org |
-| `folia` | Regionalized multi-threaded fork | **1.19 → 26.x** (all builds) | fill.papermc.io v3 |
-| `forge` | The original mod loader | **1.1 → 26.2** (every loader) | files.minecraftforge.net + maven |
-| `neoforge` | Forge's community successor | **1.20.1 → 26.1.2** (every loader) | maven.neoforged.net |
-| `fabric` | Lightweight mod loader | **1.14 → 26.x** (every loader) | meta.fabricmc.net |
-| `quilt` | Fabric fork with community focus | **1.14 → 26.x** (every loader) | meta.quiltmc.org |
-| `mohist` | Forge + Bukkit hybrid | 1.7.10, 1.12.2, 1.16.5, 1.20.1 | mohistmc.com |
-| `magma` | Forge + Bukkit hybrid | 1.12.2, 1.16.5, 1.20.1 | GitHub releases |
-| `bungeecord` | Classic proxy | always latest | ci.md-5.net |
-| `velocity` | Modern proxy | **1.0 → 4.0** (all builds) | fill.papermc.io v3 |
-| `waterfall` | BungeeCord fork (Paper team) | **1.7 → latest** (all builds) | fill.papermc.io v3 |
-| `bedrock` | Official Bedrock Dedicated Server | all official releases | minecraft.net |
-| `nukkit` | Bedrock Java server | always latest | ci.opencollab.dev |
-| `pocketmine` | Bedrock PHP server | always latest | GitHub releases |
-| `github` | **Any** server software published as a GitHub release | any tag / latest | api.github.com |
-| `custom` | Your own jar + command | anything | - |
+| `vanilla` | Official Mojang server | Alpha to 26.x + all snapshots | Mojang |
+| `paper` | High performance server | 1.7 to 26.x, all builds | PaperMC |
+| `spigot` | Classic plugin server | 1.8 to 26.x (BuildTools) | SpigotMC |
+| `purpur` | Feature packed fork | 1.14 to 26.x, all builds | PurpurMC |
+| `folia` | Multithreaded region fork | 1.19 to 26.x, all builds | PaperMC |
+| `forge` | The original mod loader | 1.1 to 26.x, every loader | Forge maven |
+| `neoforge` | Modern mod loader | 1.20.1+, every loader | NeoForge |
+| `fabric` | Lightweight mod loader | 1.14+, every loader | FabricMC |
+| `quilt` | Community mod loader | 1.14+, every loader | QuiltMC |
+| `mohist` | Forge + Bukkit hybrid | 1.7.10 / 1.12.2 / 1.16.5 / 1.20.1 | MohistMC |
+| `magma` | Forge + Bukkit hybrid | 1.12.2 / 1.16.5 / 1.20.1 | GitHub |
+| `bungeecord` | Classic proxy | always latest | MD-5 Jenkins |
+| `velocity` | Modern proxy | 1.x to 4.x, all builds | PaperMC |
+| `waterfall` | Bungee fork by Paper team | 1.7+, all builds | PaperMC |
+| `bedrock` | Bedrock Dedicated Server | every official release | Mojang |
+| `nukkit` | Bedrock logic in Java | always latest | Cloudburst |
+| `pocketmine` | Bedrock logic in PHP | always latest | PMMP |
+| `github` | Any jar published on GitHub | any release/tag | GitHub API |
+| `custom` | Bring your own files | anything | you |
 
-**Deprecated / legacy versions** work too: e.g. `1.7.10`, `1.12.2`, `1.16.5`
-modpacks are served by Vanilla/Forge/Fabric/Mohist/Magma and automatically
-receive **Java 8**. Snapshots: set `MINECRAFT_VERSION=latest-snapshot`
-(vanilla only - Paper & friends publish stable builds only).
+On top of that: `DL_URL` accepts any direct download link, and a
+`run.custom.sh` file lets you launch absolutely anything.
 
----
-
-## Repository layout
-
-```
-Minecraft-Eggs/
-├── egg-minecraft-multi.json   ← Universal all-in-one egg (18+ loaders, custom jars, archives & commands)
-├── Dockerfile                 ← universal runtime image (multi-JDK + tools)
-├── entrypoint.sh              ← image entrypoint (conf load, Java auto-select, banner)
-├── run.sh                     ← universal launcher (dispatch, prompts, GC tuning)
-├── install.sh                 ← universal install script (embedded in the egg)
-├── install-java.sh            ← Docker build helper (Adoptium JRE downloader)
-├── tests/                     ← Automated Docker test suite (all loaders & versions)
-├── .github/workflows/docker-image.yml  ← CI: builds & publishes the GHCR image
-└── README.md
-```
+**Deprecated and legacy versions are first class citizens**: `1.7.10`,
+`1.12.2`, `1.16.5` modpacks and old maps work out of the box and get the
+correct Java runtime automatically.
 
 ---
 
-## Setup
+## The console wizard
 
-### 1. Import the egg
+If the egg finds a required setting that is missing or invalid, it does not
+fail silently. It asks you in the live console:
 
-1. Download [`egg-minecraft-multi.json`](egg-minecraft-multi.json).
-2. Go to **Admin → Nests → Minecraft** in Pterodactyl / Pelican / Feather Panel (create the nest first if needed).
-3. Click **Import Egg**, upload `egg-minecraft-multi.json`, and click **Save**.
+```
+container@pterodactyl~ [warn] Server type 'banana' is not supported by this egg.
+? Select a server type [default: vanilla, 120s timeout]: paper
+container@pterodactyl~ Saved server type 'paper' in .multi-mc.conf (delete this file to reset)
+```
 
-### 2. Create a server
+How it behaves:
 
-| Field | Value |
+- Answers are saved to `.multi-mc.conf` inside the server directory, so future
+  starts just work.
+- Panel variables always win over saved answers.
+- Prompts time out after 120 seconds and use the default: a broken config can
+  never hang a startup forever.
+- Delete `.multi-mc.conf` to run the wizard again from scratch.
+- The file is plain `key=value`, parsed safely (never executed), `chmod 600`.
+
+---
+
+## Egg variable reference
+
+28 variables total. `USER` = visible and editable by server owners in the
+panel; `ADMIN` = hidden (set only by administrators).
+
+### Choosing the software
+
+| Variable | Default | Who | Description |
+|---|---|---|---|
+| `SERVER_TYPE` | `vanilla` | USER | Software to install (see supported table) |
+| `MINECRAFT_VERSION` | `latest` | USER | Exact version or keyword: `latest`, `stable`, `release`, `ga`, `latest-snapshot`, `snapshot`, `alpha`, `beta`, `experimental`, `nightly`, `preview`, `dev` |
+| `BUILD_NUMBER` | `latest` | USER | Pin a build for Paper/Folia/Purpur/Velocity/Waterfall/Mohist |
+| `LOADER_VERSION` | `latest` | USER | Mod loader version for Forge/NeoForge/Fabric/Quilt |
+| `GITHUB_REPO` | *(empty)* | USER | `owner/repo` when type is `github` |
+| `GITHUB_TAG` | `latest` | USER | Release tag for GitHub installs |
+| `GITHUB_ASSET` | *(empty)* | USER | Asset substring filter (empty = auto pick a jar) |
+| `SERVER_JARFILE` | `server.jar` | USER | Jar filename (auto-handled for Forge/NeoForge 1.17+) |
+| `CUSTOM_COMMAND` | `java -Xmx1024M -jar server.jar` | USER | Full command when type is `custom` |
+
+### Java and performance
+
+| Variable | Default | Who | Description |
+|---|---|---|---|
+| `JAVA_VERSION` | *(empty = auto)* | USER | Force a runtime: `8`, `11`, `17`, `21`, `25`, or anything installable on demand (`27`, `graalvm-21`, `corretto-21`, `semeru-21`, a tar.gz URL, `custom`). Auto mode picks per Minecraft version |
+| `JAVA_FLAGS` | Aikar's tuned G1GC set | USER | Full JVM arguments override. Clear it to let `GC_TYPE` decide; a single space disables tuning |
+| `GC_TYPE` | `auto` | USER | `auto` (Aikar G1GC), `zgc`, `parallel`, `g1gc` - used only when `JAVA_FLAGS` is empty |
+| `EXTRA_ARGS` | *(empty)* | USER | Server arguments after the jar, e.g. `--nogui` |
+
+### Fresh server.properties values
+
+Applied only when the installer generates a brand new `server.properties`.
+They never overwrite files you edited yourself.
+
+| Variable | Default | Who |
+|---|---|---|
+| `MOTD` | `A Minecraft Server` | USER |
+| `MAX_PLAYERS` | `20` | USER |
+| `ONLINE_MODE` | `true` | USER |
+| `VIEW_DISTANCE` | `10` | USER |
+| `DIFFICULTY` | *(empty)* | USER |
+| `GAMEMODE` | *(empty)* | USER |
+| `PVP` | `true` | USER |
+| `RCON_PASSWORD` | *(empty)* | USER (enables RCON when set) |
+
+### Content, updates and maintenance
+
+| Variable | Default | Who | Description |
+|---|---|---|---|
+| `AUTO_UPDATE` | `1` | USER | `1` = reinstall always refreshes software; `0` = skip if files exist |
+| `KEEP_BACKUP` | `0` | USER | `1` = keep previous jar as `<name>.old` when updating |
+| `WORLD_URL` | *(empty)* | ADMIN | World zip imported into `./world` during install |
+| `EXTRA_URLS` | *(empty)* | ADMIN | Extra downloads at install, one `[subdir/]|url` per line |
+| `SHOW_VERSIONS` | `0` | ADMIN | `1` + Reinstall lists all versions of the project, changes nothing |
+| `DL_URL` | *(empty)* | ADMIN | Direct download URL that bypasses project logic |
+| `DEBUG` | `0` | ADMIN | `1` = console-level tracing of installer and launcher |
+
+---
+
+## Examples cookbook
+
+### Vanilla 1.21.4
+```
+SERVER_TYPE       vanilla
+MINECRAFT_VERSION 1.21.4
+```
+Snapshots: set `MINECRAFT_VERSION=latest-snapshot` (or `alpha`, `beta`).
+
+### Paper with plugins and an imported world
+```
+SERVER_TYPE       paper
+MINECRAFT_VERSION latest
+EXTRA_URLS        plugins|https://example.com/ViaVersion.jar
+                  plugins|https://example.com/Geyser.jar
+WORLD_URL         https://maps.example.com/my-world.zip
+```
+
+### Legacy modpack (Forge 1.12.2)
+```
+SERVER_TYPE       forge
+MINECRAFT_VERSION 1.12.2
+LOADER_VERSION    latest
+```
+Java 8 is selected automatically. Modern Forge/NeoForge launch through their
+generated `unix_args.txt` without any configuration.
+
+### NeoForge 26.1.2 with pinned loader
+```
+SERVER_TYPE       neoforge
+MINECRAFT_VERSION 26.1.2
+LOADER_VERSION    latest
+```
+
+### Velocity proxy network
+```
+SERVER_TYPE       velocity
+MINECRAFT_VERSION latest
+```
+`velocity.toml` is created and its bind line patched to your allocation.
+Stopping works with the normal Stop button (`stop` is translated to `end`).
+
+### BungeeCord
+```
+SERVER_TYPE       bungeecord
+```
+`config.yml` template included, port managed by the panel.
+
+### Bedrock Dedicated Server
+```
+SERVER_TYPE       bedrock
+MINECRAFT_VERSION latest
+```
+Port `19132`. x86_64 hosts only (Mojang ships no ARM binary; the installer
+warns on ARM).
+
+### PocketMine-MP / Nukkit
+```
+SERVER_TYPE       pocketmine     # or nukkit
+```
+
+### Any GitHub-published server (Arclight, Feather, forks, ...)
+```
+SERVER_TYPE       github
+GITHUB_REPO       IzzelAliz/Arclight
+GITHUB_TAG        latest
+GITHUB_ASSET      server
+```
+
+### Crossplay in one line (Geyser + Floodgate + ViaVersion)
+```
+SERVER_TYPE       paper
+MINECRAFT_VERSION latest
+EXTRA_URLS        plugins|https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/geyser
+                  plugins|https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/floodgate
+```
+Add port `19132` to the server for Bedrock players.
+
+### Bring your own everything
+```
+SERVER_TYPE       custom
+CUSTOM_COMMAND    java -Xmx2048M -jar myserver.jar
+DL_URL           https://example.com/myserver.zip   # optional admin var
+```
+Ultimate escape hatch: put a `run.custom.sh` in the server files and it is
+executed instead of the built-in launcher.
+
+### List every available version
+Set `SHOW_VERSIONS=1`, press **Reinstall**, read the list in console. Nothing
+is changed.
+
+---
+
+## Updating servers safely
+
+- Change `MINECRAFT_VERSION` / `BUILD_NUMBER` / `LOADER_VERSION`, press
+  **Reinstall**. With `AUTO_UPDATE=1` the software refreshes in place:
+  worlds, configs and plugins are untouched.
+- Switching **server type** or jumping across major Minecraft lines triggers
+  **instance archiving** (see below): nothing is lost.
+- `KEEP_BACKUP=1` additionally keeps the previous jar as `<name>.old`.
+
+### Safe type and version switching
+
+The installer stores the installed state in `.mc-instance.conf`. On reinstall
+it compares old vs new:
+
+- **Same type + same major version line** (for example `1.21.x -> 1.21.y`):
+  updated in place. Worlds/configs/plugins stay exactly as they are.
+- **Breaking change** (type switch like `vanilla -> paper`, or a jump like
+  `1.20.x -> 1.21.x`, or snapshot channel flips):
+  the entire previous server is **moved** into
+  `archive/<old-type>-<old-version>-<timestamp>/` and the new server is
+  installed fresh next to it.
+
+Nothing is ever deleted. The console tells you the archive folder name;
+delete those folders manually from the File Manager whenever you want.
+
+---
+
+## Java guide
+
+Auto-selection map used by the entrypoint:
+
+| Minecraft | Java chosen |
 |---|---|
-| **Egg** | `Multi Minecraft` |
-| **Docker image** | `Universal (Auto Java 8-26+)` (recommended) |
-| **Ports** | `25565` (Java), `19132` (Bedrock / Nukkit / PocketMine), `25577` (proxies) |
-| **Memory** | 1 GB minimum (2-4 GB recommended for Paper+ / modded) |
+| 26.x and newer | 25 (or newer if present) |
+| 1.20.5 - 1.21.x | 21 |
+| 1.17 - 1.20.4 | 17 |
+| 1.16.5 and older | 8 |
+| proxies / nukkit | 21 |
+| bedrock / pocketmine | not needed |
 
-### 3. Configure variables
+Options in order of precedence:
 
-Set **Server Type** and **Minecraft Version** (see [examples](#examples)),
-then press **Install**. Accept the **EULA** in the panel when starting.
+1. `JAVA_URL`: direct URL to any Java runtime archive (admin variable).
+2. `JAVA_VERSION`: exact major (`8`...`25`), future majors (`27`),
+   vendors (`graalvm-21`, `corretto-21`, `semeru-21`), a direct tar.gz URL,
+   or `custom` to use a JVM you uploaded into the server directory.
+3. Empty: auto-selected from the table above.
 
-### 4. Start
-
-The console shows a banner, auto-selects Java, and runs the server. If
-anything is missing, it **asks you in the console** and remembers the answer.
-
-> **No image build required** - images are pre-built on GitHub Container
-> Registry (see below). If you fork the repo, the CI workflow builds them
-> for you automatically on every push to `main`.
+Missing runtimes are downloaded on demand inside the container at start -
+no image rebuild needed, so future Minecraft versions work even on old images.
 
 ---
 
-## Docker images (GHCR)
+## Performance tuning
 
-The image is built and published by GitHub Actions from this repository:
+- The default `JAVA_FLAGS` are **Aikar's tuned G1GC flags**, compatible with
+  Java 8 through 25, giving low pause times and stable tick rates.
+- Big servers (8 GB+): clear `JAVA_FLAGS` and set `GC_TYPE=zgc` (Java 21+).
+- Tiny servers: keep defaults; disable tuning by setting `JAVA_FLAGS` to one
+  space.
+- `EXTRA_ARGS=--nogui` silences GUI warnings on some versions.
+- The banner prints which flags source is active (`JAVA_FLAGS` or `GC_TYPE=x`).
+- Memory tiers we recommend: 1024 MB vanilla/small proxy, 2048-4096 MB
+  Paper/Purpur, 6144+ MB modpacks, plus `-Xms` equals `-Xmx` behavior via
+  AlwaysPreTouch in the default flag set.
+---
 
-| Tag | Contents |
+## Error logs and diagnostics
+
+Two persistent logs live inside the server directory. They survive restarts
+and rotate automatically at ~512 KB (old copy becomes `*.old`).
+
+| File | What it contains |
 |---|---|
-| `ghcr.io/potenfyr-studios/minecraft-eggs:latest` | **Universal** - Java 8, 11, 17, 21, 25, 26 + dynamic on-demand installer + PHP 8.1 (PocketMine) + native libs (Bedrock) + jq/curl/unzip/git-ready tools |
+| `install-error.log` | Full step-by-step trace of every install run: timestamps, function names and line numbers for each executed command |
+| `error.log` | Launcher history: every start/stop event, crashes with exit code, Java version, full launch command, EULA state, last errors from `logs/latest.log` |
 
-Architectures: `linux/amd64` and `linux/arm64`.
+When an installation fails you do not need to re-run anything: the console
+prints a red failure report plus the **last 40 trace lines** immediately.
+When the server process crashes, the launcher prints automated diagnostics
+(EULA state, OOM detection at exit code 137, crash-report summaries,
+recent log errors) and appends everything to `error.log`.
 
-Build it yourself:
+For extra verbosity set `DEBUG=1` (admin variable) to mirror the installer
+trace on the console too.
 
-```bash
-# universal
-docker build -t minecraft-eggs:latest .
+---
 
-```
+## Troubleshooting matrix
 
-Image contents (deliberately minimal):
-
-- **JREs only** - servers never need a JDK at runtime (Spigot's BuildTools
-  downloads a temporary JDK at install time, so the image stays lean)
-- **PHP 8.1** with the extensions PocketMine-MP requires
-- **libcurl4 / libssl3** for the Bedrock native binary
-- `curl wget jq unzip xz-utils ca-certificates tzdata iproute2 locales`
-- **No** git, compilers or build tooling (added on demand at install time)
+| Symptom | Cause | Fix |
+|---|---|---|
+| `UnsupportedClassVersionError` | Wrong Java for that MC version | Leave `JAVA_VERSION` empty (auto) or pick matching value; use the Universal image |
+| Install says "version not found" then installs latest | Typo in version | Set `SHOW_VERSIONS=1` + Reinstall to list valid versions |
+| Server unreachable | Port mismatch | Reinstall once so config templates exist; panel patches ports on boot |
+| Spigot build fails | Not enough memory during BuildTools | Temporarily raise allocation to 2048+ MB, reinstall |
+| Bedrock will not start on ARM | Mojang ships x86_64 only | Use an x86_64 node |
+| Forge 1.17+ "no main manifest" | Stale `unix_args.txt` | Delete it in File Manager and reinstall |
+| Wizard prompts every start | Corrupted `.multi-mc.conf` | Delete the file, answer prompts once more |
+| Want my own JVM flags | Custom tuning | Set `JAVA_FLAGS`; server args go to `EXTRA_ARGS` |
+| Proxy ignores Stop | Proxies use `end` | Already handled: the launcher translates `stop` -> `end` |
+| Changed type, old files gone? | They are archived | Look in `archive/<old-type>-<old-version>-<timestamp>/`, delete manually when ready |
 
 ---
 
 ## How it works
 
 ```
-Pterodactyl panel ──► Wings (node)
-                          │
-                          ▼
-              ┌───────────────────────────┐
-              │  ghcr.io/potenfyr-studios/ │
-              │  minecraft-eggs:latest     │
-              └───────────────────────────┘
-                          │ 1. entrypoint.sh
-                          │    • loads .multi-mc.conf (persisted settings)
-                          │    • auto-selects / installs Java (8-26+, snapshots, future)
-                          │    • prints banner + runs the STARTUP command
-                          ▼
-                       run.sh (the launcher)
-                          │ 2. validates SERVER_TYPE (+ console wizard)
-                          │ 3. dispatches:
-                          │    bedrock    → ./bedrock_server
-                          │    pocketmine → php PocketMine-MP.phar --no-wizard
-                          │    proxies    → java ... -jar ...  ("stop"→"end")
-                          │    java types → java [Aikar G1GC] -jar server.jar
-                          │                 (+ @unix_args.txt for Forge/NeoForge)
-                          ▼
-                       Minecraft server process
+Panel (Pterodactyl / Pelican)
+      |  imports egg, injects variables as environment
+      v
+Wings daemon on the game node
+      |  creates container from ghcr.io/potenfyr-studios/minecraft-eggs
+      v
+entrypoint.sh
+      1. loads .multi-mc.conf (persisted answers)
+      2. picks the right Java runtime (8/11/17/21/25/26 or on-demand)
+      3. prints the colored banner
+      4. runs the STARTUP command -> run.sh
+      v
+run.sh
+      5. validates settings, asks in console if something is wrong
+      6. auto-installs if server files are missing (self-healing)
+      7. dispatches:
+           bedrock     -> ./bedrock_server
+           pocketmine  -> php PocketMine-MP.phar --no-wizard
+           proxies     -> java ... ("stop" translated to "end")
+           java types  -> java [tuned flags] -jar server.jar
+                         (+ @unix_args.txt for Forge/NeoForge 1.17+)
+      v
+Minecraft server process (crash diagnostics + error.log on failure)
 ```
 
-**Installation** runs in a separate one-shot container (the same image, as
-root) with the server directory mounted at `/mnt/server`. The script
-resolves versions against the official APIs, downloads/installs the server,
-writes sane default configs, and exits. Wings then boots the runtime
-container with your files in `/home/container`.
+Installation runs in a one-shot container from the same image, as root, with
+the server mounted at `/mnt/server`: it resolves versions against official
+APIs, verifies them, downloads, writes default configs, records the instance
+marker, prints a summary, exits. Wings then boots the runtime container with
+your files at `/home/container`.
 
-**The panel→container contract:**
+The panel patches ports into `server.properties`, BungeeCord/Waterfall
+`config.yml` and Velocity's `velocity.toml` before every boot, and waits for
+one of several "done" markers (`Done (`, `)! For help, type "help"`,
+`Listening on`, `Server started.`) so any of the 19 types shows correct status.
 
-- Wings injects every egg variable as an **environment variable**
-- The egg's `STARTUP` (`bash run.sh`) is executed by the image entrypoint
-  (same contract as the official `yolks` images)
-- `server.properties`, `config.yml` and `velocity.toml` are patched with the
-  **allocation port** before every boot (panel config parsers)
-- The panel waits for one of the `done` patterns (`Done (`, `)! For help,
-  type "help"`, `Listening on`, `Server started.`, `Default game type`)
-- `stop` is sent on shutdown - translated to `end` for proxies, so one stop
-  command works for **every** server type
+If the server directory is ever empty at start (fresh disk, restored backup),
+run.sh self-heals by invoking the installer inside the running container.
 
 ---
 
-## Egg variables
+## Architecture and host OS support
 
-All 21 variables. `🔒` = not user-editable (admin-only), `👤` = users can change it.
+Everything runs inside the container, so the node OS is irrelevant: Debian,
+Ubuntu, Rocky, Alpine, Arch and NixOS hosts all work. The panel can live on a
+different machine entirely.
 
-| Variable | Default | 🔒/👤 | Description |
-|---|---|---|---|
-| `SERVER_TYPE` | `vanilla` | 👤 | Software to install (see table above) |
-| `MINECRAFT_VERSION` | `latest` | 👤 | Version (also `latest-snapshot`; for Velocity/Waterfall the software version; for Bedrock the bedrock version) |
-| `BUILD_NUMBER` | `latest` | 👤 | Build for Paper/Folia/Purpur/Velocity/Waterfall/Mohist |
-| `LOADER_VERSION` | `latest` | 👤 | Loader for Forge/NeoForge/Fabric/Quilt (NeoForge accepts full versions like `21.1.148`) |
-| `GITHUB_REPO` | *(empty)* | 👤 | `owner/repo` when `SERVER_TYPE=github` |
-| `GITHUB_TAG` | `latest` | 👤 | Release tag for GitHub installs |
-| `GITHUB_ASSET` | *(empty)* | 👤 | Asset substring filter (empty = auto-pick a `.jar`) |
-| `SERVER_JARFILE` | `server.jar` | 👤 | Jar name (ignored for Forge/NeoForge 1.17+) |
-| `JAVA_VERSION` | *(empty)* | 👤 | Force a JVM (`8/11/17/21/25/26`, `graalvm-21`, `corretto-21`, `zulu-17`, `semeru-21`, `custom`, `local`, or direct URL `https://...`); empty = auto |
-| `JAVA_URL` | *(empty)* | 👤 | Direct URL to a custom Java archive (`.tar.gz` or `.zip`) to download and use automatically |
-| `JAVA_FLAGS` | Aikar's tuned G1GC flags | 👤 | JVM arguments - default is the performance-optimized set; clear it to let `GC_TYPE` choose, or set a single space to disable |
-| `GC_TYPE` | `auto` | 👤 | `auto` (Aikar G1GC) / `zgc` / `parallel` - used only when `JAVA_FLAGS` is empty |
-| `EXTRA_ARGS` | *(empty)* | 👤 | Arguments appended **after** the jar, e.g. `--nogui` |
-| `MOTD` | `A Minecraft Server` | 👤 | Written to a fresh `server.properties` |
-| `MAX_PLAYERS` | `20` | 👤 | Written to a fresh `server.properties` |
-| `ONLINE_MODE` | `true` | 👤 | Written to a fresh `server.properties` |
-| `VIEW_DISTANCE` | `10` | 👤 | Written to a fresh `server.properties` |
-| `DIFFICULTY` | *(empty)* | 👤 | `peaceful/easy/normal/hard` - written to a fresh `server.properties` |
-| `GAMEMODE` | *(empty)* | 👤 | `survival/creative/adventure/spectator` - written to a fresh `server.properties` |
-| `PVP` | `true` | 👤 | Written to a fresh `server.properties` |
-| `RCON_PASSWORD` | *(empty)* | 👤 | Enables RCON with this password in a fresh `server.properties` (plain text) |
-| `EXTRA_URLS` | *(empty)* | 🔒 | Extra files downloaded at install - one `[subdir/]|url` per line (plugins, configs, mods) |
-| `WORLD_URL` | *(empty)* | 🔒 | World zip imported into `./world` during install |
-| `DEBUG` | `0` | 🔒 | `1` = `bash -x` install + environment dump at start |
-| `AUTO_UPDATE` | `1` | 👤 | `1` = always (re)install on reinstall; `0` = skip if files exist |
-| `KEEP_BACKUP` | `0` | 👤 | `1` = keep previous jar as `<name>.old` |
-| `SHOW_VERSIONS` | `0` | 🔒 | `1` + Reinstall prints all available versions, changes nothing |
-| `DL_URL` | *(empty)* | 🔒 | Direct URL override (bypasses project logic) |
-| `CUSTOM_COMMAND` | `java -Xmx1024M -jar server.jar` | 👤 | Exact command when `SERVER_TYPE=custom` |
+| Architecture | CI image published | Notes |
+|---|---|---|
+| `linux/amd64` | yes | all runtimes |
+| `linux/arm64` | yes | all runtimes |
+| `ppc64le` | build natively | Adoptium publishes these JREs |
+| `s390x` | build natively | Adoptium publishes these JREs |
+| `riscv64` | build natively | newest runtimes only |
+| other/exotic | build natively | distro OpenJDK fallback installed automatically |
 
-**Persisted settings (`.multi-mc.conf`):** answers given in the console wizard
-are saved in a `KEY=VALUE` file in the server directory. The file is
-`chmod 600`, parsed safely (never evaluated), and only fills variables the
-panel did **not** provide - panel settings always win. Delete the file to
-reset to a fresh first-run wizard.
+Native build for any arch is a single command and takes minutes:
+`docker build -t ghcr.io/potenfyr-studios/minecraft-eggs:latest .`
+The Dockerfile never hard-fails on unknown architectures.
+
+Known vendor limits: Bedrock Dedicated Server is x86_64 only, and BuildTools
+needs an x64/aarch64 JDK.
 
 ---
 
-## Examples
+## Panel compatibility
 
-### Vanilla 1.21.4
-```
-SERVER_TYPE      = vanilla
-MINECRAFT_VERSION= 1.21.4
-```
-Java 21 is auto-selected. Snapshots: `MINECRAFT_VERSION=latest-snapshot`.
+The egg is a standard `PTDL_v2` export:
 
-### Paper + plugins + a prebuilt world
-```
-SERVER_TYPE      = vanilla|paper
-MINECRAFT_VERSION= latest        # resolves to 26.2
-BUILD_NUMBER     = latest
-EXTRA_URLS       = plugins|https://download.example.com/ViaVersion.jar
-                   plugins|https://download.example.com/Geyser.jar
-WORLD_URL        = https://www.planetminecraft.com/.../world.zip
-```
-`EXTRA_URLS` places each file into `plugins/` (or any subdirectory), and
-`WORLD_URL` unpacks the world into `./world` - a fully preconfigured server
-in one install.
-
-### Install software that only exists on GitHub (e.g. Arclight, Feather, ...)
-```
-SERVER_TYPE      = github
-GITHUB_REPO      = IzzelAliz/Arclight
-GITHUB_TAG       = latest        # or a tag like 1.21.4
-GITHUB_ASSET     = server        # optional substring filter
-```
-Picks the first `.jar` asset (or the first asset) of the release.
-
-### Bring your own jar
-```
-SERVER_TYPE      = custom
-CUSTOM_COMMAND   = java -Xmx2048M -jar server.jar
-```
-Upload your jar (or set `DL_URL`) and run whatever you want.
-
-### Use a Custom Java Runtime (GraalVM, Corretto, Zulu, or direct URL)
-You can run your server with any JVM vendor or custom build:
-
-1. **Vendor runtime**:
-   ```
-   JAVA_VERSION = graalvm-21   # or corretto-21, zulu-17, semeru-21, etc.
-   ```
-2. **Direct archive URL** (tar.gz or zip):
-   ```
-   JAVA_URL = https://download.oracle.com/java/21/latest/jdk-21_linux-x64_bin.tar.gz
-   ```
-3. **Local custom runtime**:
-   Place a Java runtime into a `./java` or `./jre` folder in your server files, or set `JAVA_VERSION=custom`.
-
-### Anything not covered? (ultimate escape hatch)
-Drop a `run.custom.sh` into the server directory - it is executed instead of
-the built-in launcher (all variables remain available).
+- **Pterodactyl 1.x**: import under Nests, works with stock Wings.
+- **Pelican 1.x**: upload the same file; Pelican understands PTDL_v2 eggs.
+- Both use Wings-compatible daemons, so variables, the console wizard,
+  archiving behavior and logging are identical everywhere.
+- The console prefix adapts: wings-based panels injecting `P_SERVER_UUID` show
+  `container@pterodactyl~`; anything else falls back to `container@panel~`.
+- Any panel that speaks the wings HTTP API and supports docker images from
+  GHCR works out of the box.
 
 ---
 
-## Crossplay & plugin guide (Geyser, ViaVersion, ...)
+## Administrator and production guide
 
-Java and Bedrock players can play together on one server with **Geyser**,
-and clients of any Minecraft version can join with **ViaVersion**:
+### Publishing the image
 
-```
-SERVER_TYPE      = paper
-MINECRAFT_VERSION= 1.21.4
-EXTRA_URLS       = plugins|https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/geyser
-                   plugins|https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/floodgate
-                   plugins|https://hangar.papermc.io/api/v1/projects/ViaVersion/versions/latest/PAPI-Download
-```
-- **Geyser** = Bedrock players join your Java server on the Bedrock port
-  (allocate `19132` as a second port)
-- **Floodgate** = lets Bedrock players join without a paid Java account
-- **ViaVersion / ViaBackwards** = older/newer Java clients connect to any
-  version - pick the right version for your server version from the
-  project's download page and use `EXTRA_URLS` to install it
-- Any other plugin/mod/resource-pack hosted at a direct URL works the same
-  way; software only published as GitHub releases can be installed as the
-  server itself via `SERVER_TYPE=github`
+CI (`.github/workflows/docker-image.yml`) builds the single universal image
+for `amd64` + `arm64` on every push to `main` and publishes it as
+`ghcr.io/potenfyr-studios/minecraft-eggs:latest`. No secrets required beyond
+the built-in `GITHUB_TOKEN`.
 
-> **Pufferfish / Sponge / Arclight / Feather / NanoLimbo & friends:** these
-> projects have no stable public download API - install their jars with
-> `SERVER_TYPE=github` (GitHub releases) or `DL_URL` (direct link).
-
----
-
-## User guide
-
-### First start
-1. **Install** the server (watch the console for a summary showing the
-   resolved type, version, Java and jar)
-2. **Start** it - if the panel asks you to accept the **EULA**, accept it
-3. If a variable is missing/invalid, the console **asks you** - answer and
-   it is remembered (`.multi-mc.conf`). Prompts time out after 120 seconds
-   and fall back to the default, so a broken config never hangs a start.
-
-### Updating the server
-Change `MINECRAFT_VERSION` / `BUILD_NUMBER` / `LOADER_VERSION` and press
-**Reinstall**. With `AUTO_UPDATE=1` the software is replaced (old jar kept
-only if `KEEP_BACKUP=1`). World data is **never** touched.
-
-### Finding versions
-Set `SHOW_VERSIONS=1` and press **Reinstall** - the console lists every
-available version of the project, then stops without changing anything.
-
-### Importing a world
-Set `WORLD_URL` to a world zip (Planet Minecraft, a previous host, a backup)
-and press **Reinstall** - it lands in `./world` automatically (single-folder
-archives are unwrapped). Worlds are only imported on **fresh** installs; a
-`Reinstall` with an existing `world/` folder does not touch it.
-
-### Installing plugins, mods and resource packs
-`EXTRA_URLS` downloads files during installation - one `[subdir/]|url` per
-line. Examples: `plugins|https://.../plugin.jar`, `mods|https://.../mod.jar`,
-`config|https://.../config.yml`. Zip files are extracted in place.
-
-### Safe type / version switching (instance archiving)
-Changing SERVER_TYPE or jumping across major Minecraft versions is treated as
-a **breaking change**. On the next Reinstall the previous server files are
-**archived, never deleted**, into:
+Manual native build for any architecture:
 
 ```
-archive/<old-type>-<old-version>-<timestamp>/
+docker build -t ghcr.io/potenfyr-studios/minecraft-eggs:latest .
 ```
-
-The new server is installed fresh beside it and the console tells you exactly
-where the old data went. Review `archive/` in the panel File Manager (or SFTP)
-and delete old folders manually when you no longer need them. Same-line updates
-(e.g. 1.21.1 -> 1.21.4 on the same type) are done **in place**: worlds,
-configs and plugins stay untouched.
-
-The current instance state is tracked in `.mc-instance.conf` (do not edit).
-
-### Version keywords
-`MINECRAFT_VERSION` accepts keywords as well as exact versions:
-- `latest`, `stable`, `release`, `ga` -> newest stable release
-- `snapshot`, `alpha`, `beta`, `experimental`, `nightly`, `preview` ->
-  newest snapshot (vanilla; other projects fall back to their latest)
-Invalid identifiers fall back to the latest release with a console warning.
-
-### Error logs & tracing
-Two persistent logs live in the server directory for troubleshooting:
-- `install-error.log` - every install run appends a full step-by-step trace
-  (timestamps + function + line). On failure the console prints a report with
-  the last 40 trace lines automatically.
-- `error.log` - launcher history: start/stop events, crashes with exit code,
-  Java version, command line and the last errors from `logs/latest.log`.
-Both rotate at ~512 KB (`*.old`). No re-run with DEBUG needed to get a trace.
-
-### Panel compatibility
-The egg is a standard `PTDL_v2` export and works on both **Pterodactyl 1.x**
-and **Pelican 1.x** (both run Wings-compatible daemons): import it as an egg,
-select any of the published GHCR images, and everything else (variables,
-wizard, archiving, logging) behaves identically. The console prefix adapts to
-the panel that started the container.
-### Debugging
-Set `DEBUG=1` (admin-only variable) to run the install with `bash -x` and to
-print a full resolved-environment dump at server start.
-
-### Ports
-- Java servers: allocate `25565` (or any port - `server.properties` is patched)
-- Bedrock/Nukkit/PocketMine: `19132`
-- BungeeCord/Waterfall/Velocity: `25577`
-
-### Stopping
-Just press Stop - `stop` is sent and translated to `end` for proxies.
-
-### Performance
-- **Default `JAVA_FLAGS` = Aikar's tuned G1GC flags** - the well-known
-  performance set (bounded pause targets, fast young-gen, pre-touched heap)
-- Every flag in the default set is compatible with **Java 8 → 26+**, so old
-  and new servers get the same tuning without risk
-- 8 GB+ RAM: clear `JAVA_FLAGS` and set `GC_TYPE=zgc` (Java 21+) for the
-  lowest-latency pauses
-- Small servers: keep the defaults; you can disable tuning by setting
-  `JAVA_FLAGS` to a single space
-- Server arguments (not JVM flags) go in `EXTRA_ARGS`, e.g. `--nogui`
-- The console prints which flags are active and where they came from
-  (`JVM flags source: JAVA_FLAGS` or `GC_TYPE=...`)
-
----
-
-## Administrator guide
-
-### Building & hosting the image on GHCR
-The workflow [`.github/workflows/docker-image.yml`](.github/workflows/docker-image.yml):
-- builds the single universal image (tag `latest`) for `amd64` + `arm64`
-- pushes `latest`, `java<X>`, and per-commit tags to
-  `ghcr.io/potenfyr-studios/minecraft-eggs`
-- runs on push to `main`, on `v*` tags, on PRs (build-only) and manually
-
-No extra secrets are needed (`GITHUB_TOKEN` is enough for GHCR).
 
 ### Egg updates
-The egg's `meta.update_url` points at this repository - the panel can fetch
-new egg versions automatically.
 
-### Auto-updating server software
-`AUTO_UPDATE=1` (default) means every **Reinstall** refreshes the software.
-Combined with a panel **Schedule** that reinstalls periodically, servers can
-self-update. For stability pin exact versions instead.
+The egg carries `meta.update_url` pointing at this repository, so panels can
+pull newer egg revisions automatically.
 
-### Offering it to customers
-- Lock `JAVA_FLAGS`, `DL_URL`, `EXTRA_URLS`, `WORLD_URL`, `DEBUG`,
-  `SHOW_VERSIONS` (already admin-only or hidden)
-- Let users edit `SERVER_TYPE`, version, MOTD/players/difficulty etc.
-- RCON for gamepads: set `RCON_PASSWORD` on a fresh install (enables
-  `enable-rcon` + password in `server.properties`)
-- `PROPS` note: `MOTD`/`MAX_PLAYERS`/`ONLINE_MODE`/`VIEW_DISTANCE`/`DIFFICULTY`/
-  `GAMEMODE`/`PVP`/`RCON_PASSWORD` are applied only to a **freshly generated**
-  `server.properties` (they never clobber user edits)
+### Multi-tenant hosting tips
 
----
-
-## Security
-
-- Scripts run with `set -uo pipefail`; every external value is quoted
-- `.multi-mc.conf` is **parsed, never sourced** - values cannot execute code
-- The runtime container runs as the panel's unprivileged user (Wings handles
-  UID/GID); only the **install** container runs as root (required for apt/git)
-- Install downloads are **atomic** (temp file → move) and cleaned on failure
-- `DL_URL`, `GITHUB_*` and `CUSTOM_COMMAND` are documented as powerful -
-  restrict them on shared hosting
-- No secrets, tokens or API keys are used anywhere in this project
+- Hide admin variables (`DL_URL`, `EXTRA_URLS`, `WORLD_URL`, `DEBUG`,
+  `SHOW_VERSIONS`) from customers - already configured that way.
+- Let customers own the rest: software choice, versions, MOTD, players,
+  difficulty, gamemode, performance flags.
+- Use panel Schedules: a periodic Reinstall with `AUTO_UPDATE=1` keeps
+  servers updated; combine with Backups for safety.
+- `RCON_PASSWORD` lets trusted staff attach gamepads/RCON tools; it is stored
+  plaintext inside `server.properties` like every RCON setup.
+- Old data after switches lands in `archive/`; add a schedule or manual review
+  policy so disks stay lean.
 
 ---
 
-## Performance & memory
+## Security model
 
-| Concern | Answer |
-|---|---|
-| GC | Aikar G1GC by default; `GC_TYPE=zgc` for 8 GB+; `JAVA_FLAGS` to override |
-| Java auto-selection | The correct JVM for the version is chosen automatically |
-| Image weight | JREs only (no JDK); one universal image, no variant sprawl |
-| RAM | `-Xmx` = allocated memory; Aikar flags include `-XX:+AlwaysPreTouch` for consistent latency |
-| Old versions | Legacy servers get Java 8 - no more "unsupported class file version" |
-
----
-
-## Storage efficiency
-
-- Old jars are **deleted** on update unless `KEEP_BACKUP=1`
-- Install artifacts (installers, zips, BuildTools, temp JDKs) are removed
-- Templates are generated with `printf` - no bulky config blobs
-- Failed downloads never leave partial files behind
-
----
-
-## Troubleshooting
-
-| Symptom | Fix |
-|---|---|
-| `UnsupportedClassVersionError` / wrong Java | Leave `JAVA_VERSION` empty (auto) or set it explicitly; pick `Universal (Auto Java)` image |
-| Version not found | The install falls back to `latest` with a warning - set `SHOW_VERSIONS=1` to list valid versions |
-| Server binds wrong port | Reinstall once so the config template exists, then start (the panel patches the port on every boot) |
-| Spigot build fails | BuildTools needs memory - raise the server's allocation to 2 GB+ during install |
-| Bedrock won't start on ARM | Mojang ships x86_64 only - use an x86_64 node |
-| Forge 1.17+ "no main manifest" | Should not happen - the egg launches via `@unix_args.txt`; delete `unix_args.txt` and reinstall if it's stale |
-| Console prompts on every start | Delete `.multi-mc.conf` in the server files and answer correctly |
-| Want my own flags | Set `JAVA_FLAGS` (wins over `GC_TYPE`); add server args to `EXTRA_ARGS` |
-| Proxy won't stop | It does - `stop` is translated to `end`; make sure you wait a few seconds |
+- Runtime containers execute as the unprivileged panel user; only the one-shot
+  install container runs as root (needed for package bootstrap), inside its
+  own isolated filesystem namespace.
+- The root filesystem is read-only at runtime (wings default); servers write
+  only into their mounted directory.
+- All shell scripts run with `set -uo pipefail` and fully quoted expansions.
+- `.multi-mc.conf` and `.mc-instance.conf` are parsed, never sourced: values
+  cannot execute code.
+- Downloads are atomic (temp file then move) and removed on failure; archives
+  are moved, never copied twice.
+- `EXTRA_URLS` destinations are validated against path traversal; GitHub
+  repositories are format-checked; file names are sanitized.
+- No secrets, tokens or API keys exist anywhere in this project.
+- Admin-only variables (`DL_URL`, `EXTRA_URLS`, `WORLD_URL`) intentionally
+  allow arbitrary download locations: restrict them if you hand servers to
+  untrusted users.
 
 ---
 
-## Architecture & host OS support
+## FAQ
 
-The egg is **host-OS agnostic**: everything runs inside the container, so the
-node (and panel) can be any Linux distribution with Docker - Debian, Ubuntu,
-Rocky, Alpine, Arch, NixOS, etc. The panel itself may even sit on a different
-machine or architecture than the game node.
+**Q: Does changing the server type delete my world?**
+No. Breaking changes archive everything to `archive/...`. Same-line updates
+never touch your files.
 
-Supported CPU architectures:
+**Q: Can I run Fabric mods on Paper?**
+No, but switch `SERVER_TYPE=fabric`, press Reinstall, and you get a fresh
+Fabric server beside your archived Paper instance instantly.
 
-| Architecture | CI-published image | Notes |
-|---|---|---|
-| `linux/amd64` | yes | full support, all runtimes |
-| `linux/arm64` | yes | full support, all runtimes |
-| `linux/ppc64le` | build natively | Adoptium publishes these runtimes |
-| `linux/s390x` | build natively | Adoptium publishes these runtimes |
-| `linux/riscv64` | build natively | newest runtimes only |
-| 32-bit / exotic | build natively | distro OpenJDK fallback is installed automatically |
+**Q: Which Java will my server get?**
+The entrypoint picks it per Minecraft version; see the table in the Java
+guide. Override with `JAVA_VERSION` when needed.
 
-For architectures outside amd64/arm64, build natively on the host (fast,
-no emulation needed): `docker build -t ghcr.io/potenfyr-studios/minecraft-eggs:latest .`
-The Dockerfile never hard-fails on an unknown architecture: unavailable
-Temurin runtimes are skipped with a warning and a distro `default-jre-headless`
-is installed as a guaranteed fallback. Known vendor limits: Bedrock Dedicated
-Server is x86_64-only (Mojang), and BuildTools needs an x64/aarch64 JDK.
+**Q: Is Windows supported?**
+Panels and nodes must be Linux (a Pterodactyl/Pelican requirement). Inside
+the node, host distribution does not matter.
 
-## Support & Contact
+**Q: How do I see which versions exist?**
+`SHOW_VERSIONS=1` + Reinstall prints them without touching the server.
 
-For questions, bug reports, feature requests, or inquiries, reach out to us at:
-- **Email**: [support@potenfyr.in](mailto:support@potenfyr.in)
-- **GitHub Issues**: [PotenFYR-Studios/Minecraft-Eggs/issues](https://github.com/PotenFYR-Studios/Minecraft-Eggs/issues)
+**Q: A new Minecraft version just released - does this still work?**
+Yes: keyword `latest` always resolves to it, and missing Java runtimes are
+downloaded on demand inside the container.
 
 ---
 
-## License
+## Project layout
 
-MIT - see [LICENSE](LICENSE). Fork it, host it, sell it - just keep the
-credits. Made with ❤️ by **PotenFYR Studios**.
+```
+Minecraft-Eggs/
+|-- egg-minecraft-multi.json   the egg (import this)
+|-- Dockerfile                 universal multi-Java image definition
+|-- install-java.sh            Java runtime installer (Adoptium/GraalVM/...)
+|-- install.sh                 universal installer (embedded in the egg too)
+|-- run.sh                     universal launcher with wizard + diagnostics
+|-- entrypoint.sh              container init: conf load, Java pick, banner
+|-- .github/workflows/         CI: multi-arch build + publish to GHCR
+`-- README.md                  this documentation
+```
+
+Every script also exists standalone here so you can review exactly what runs
+inside your containers before importing the egg.
+
+---
+
+## License and support
+
+MIT licensed - see [LICENSE](LICENSE). Fork it, host it, sell hosting with it;
+keep the credits.
+
+- Author: **PotenFYR Studios**
+- Issues: <https://github.com/PotenFYR-Studios/Minecraft-Eggs/issues>
+- Contact: support@potenfyr.in
