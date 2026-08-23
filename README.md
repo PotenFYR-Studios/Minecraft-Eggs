@@ -25,32 +25,36 @@ automatic.
 ## Table of contents
 
 **Getting started**
+
 1. [Newbie quick start (5 minutes)](#newbie-quick-start-5-minutes)
 2. [Requirements](#requirements)
 3. [Supported server software](#supported-server-software)
 4. [The console wizard](#the-console-wizard)
 
 **Everyday use**
-5. [Egg variable reference](#egg-variable-reference)
-6. [Examples cookbook](#examples-cookbook)
-7. [Updating servers safely](#updating-servers-safely)
+
+1. [Egg variable reference](#egg-variable-reference)
+2. [Examples cookbook](#examples-cookbook)
+3. [Updating servers safely](#updating-servers-safely)
    - [Safe type and version switching](#safe-type-and-version-switching)
-8. [Java guide](#java-guide)
-9. [Performance tuning](#performance-tuning)
+4. [Java guide](#java-guide)
+5. [Performance tuning](#performance-tuning)
 
 **Reliability**
-10. [Error logs and diagnostics](#error-logs-and-diagnostics)
-11. [Troubleshooting matrix](#troubleshooting-matrix)
+
+1. [Error logs and diagnostics](#error-logs-and-diagnostics)
+2. [Troubleshooting matrix](#troubleshooting-matrix)
 
 **Expert**
-12. [How it works](#how-it-works)
-13. [Architecture and host OS support](#architecture-and-host-os-support)
-14. [Panel compatibility](#panel-compatibility)
-15. [Administrator and production guide](#administrator-and-production-guide)
-16. [Security model](#security-model)
-17. [FAQ](#faq)
-18. [Project layout](#project-layout)
-19. [License and support](#license-and-support)
+
+1. [How it works](#how-it-works)
+2. [Architecture and host OS support](#architecture-and-host-os-support)
+3. [Panel compatibility](#panel-compatibility)
+4. [Administrator and production guide](#administrator-and-production-guide)
+5. [Security model](#security-model)
+6. [FAQ](#faq)
+7. [Project layout](#project-layout)
+8. [License and support](#license-and-support)
 
 ---
 
