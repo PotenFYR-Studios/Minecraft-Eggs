@@ -14,7 +14,7 @@
 # This image ships Java 8, 11, 17, 21, 25 and 26 side by side so a single
 # image can run literally every Minecraft version ever released (Alpha -> 26.x+).
 # Future, snapshot, beta, alpha, and obsolete Java versions are also supported
-# on-demand via dynamic installation. Slim per-Java variants are published too.
+# on-demand via dynamic installation.
 
 # --- Colors -----------------------------------------------------------------
 C_RESET='\033[0m'

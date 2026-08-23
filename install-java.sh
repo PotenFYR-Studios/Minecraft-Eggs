@@ -30,14 +30,20 @@ DETECTED_ARCH=""
 case "$(uname -m)" in
     x86_64|amd64) DETECTED_ARCH="x64" ;;
     aarch64|arm64) DETECTED_ARCH="aarch64" ;;
-    *) DETECTED_ARCH="x64" ;;
+    ppc64le|ppc64) DETECTED_ARCH="ppc64le" ;;
+    s390x) DETECTED_ARCH="s390x" ;;
+    riscv64) DETECTED_ARCH="riscv64" ;;
+    *) DETECTED_ARCH="$(uname -m)" ;;
 esac
 
-# Normalize arch
-if [ "${ARCH}" = "x64" ] || [ "${ARCH}" = "aarch64" ] || [ "${ARCH}" = "amd64" ] || [ "${ARCH}" = "arm64" ]; then
+# Normalize arch (Adoptium naming); unknown values pass through untouched so
+# exotic architectures can still resolve if the vendor publishes them.
+if [ -n "${ARCH}" ]; then
     case "${ARCH}" in
         amd64) ARCH="x64" ;;
         arm64) ARCH="aarch64" ;;
+        x64|aarch64|ppc64le|s390x|riscv64) ;;
+        *) ARCH="${DETECTED_ARCH}" ;;
     esac
 else
     ARCH="${DETECTED_ARCH}"
