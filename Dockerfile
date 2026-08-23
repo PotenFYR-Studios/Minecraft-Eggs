@@ -18,6 +18,8 @@ ARG JAVA_VERSION=all
 
 FROM ubuntu:jammy
 
+LABEL author="PotenFYR Studios" maintainer="support@potenfyr.in"
+
 ARG JAVA_VERSION=all
 ARG TARGETARCH
 

@@ -26,12 +26,12 @@
                                      }
                 },
     "name":  "Multi Minecraft",
-    "description":  "One egg to rule them all. Installs, updates and runs every major Minecraft server software - Java Edition and Bedrock - across every version ever released, including future 26.x releases.\n\nSupported server types (SERVER_TYPE):\n- Vanilla, Paper, Spigot, Purpur, Folia (Java 1.7 - 26.x)\n- Forge, NeoForge, Fabric, Quilt (any loader version for any Minecraft version)\n- Mohist, Magma (hybrid Forge+Bukkit servers)\n- BungeeCord, Velocity, Waterfall (proxies)\n- Bedrock Dedicated Server, Nukkit, PocketMine-MP (Bedrock Edition)\n- GitHub (install any server jar published as a GitHub release)\n- Custom (bring your own jar / any download URL)\n\nFeatures:\n- One universal Docker image with Java 8, 11, 17, 21, 25 and 26 auto-selected by the server version\n- Automatic \"latest\" resolution with safe fallback for every project\n- Aikar\u0027s tuned G1GC flags as the default JVM args (override with JAVA_FLAGS, or GC_TYPE when cleared)\n- Panel-managed ports for server.properties, BungeeCord/Waterfall config.yml and velocity.toml\n- One stop command (\"stop\") works for every type - proxies included\n- First-run console wizard that saves answers in .multi-mc.conf\n- SHOW_VERSIONS=1 prints every available version of a project\n- EXTRA_URLS downloads plugins/configs, WORLD_URL imports an existing world\n- DEBUG mode for troubleshooting\n\nSource: https://github.com/PotenFYR-Studios/Minecraft-Eggs",
+    "description":  "One egg for every Minecraft server: Vanilla, Paper, Spigot, Purpur, Folia, Forge, NeoForge, Fabric, Quilt, Mohist, Magma, BungeeCord, Velocity, Waterfall, Bedrock, Nukkit, PocketMine-MP, GitHub releases and custom jars - every version from Alpha to 26.x including snapshots, with automatic Java selection, safe instance switching on type/version changes, tuned performance flags, plugin/world installers and full error diagnostics. By PotenFYR Studios (support@potenfyr.in).",
     "meta":  {
                  "version":  "PTDL_v2",
                  "update_url":  "https://raw.githubusercontent.com/PotenFYR-Studios/Minecraft-Eggs/main/egg-minecraft-multi.json"
              },
-    "author":  "PotenFYR Studios (https://github.com/PotenFYR-Studios/Minecraft-Eggs)",
+    "author":  "support@potenfyr.in",
     "variables":  [
                       {
                           "default_value":  "vanilla",
