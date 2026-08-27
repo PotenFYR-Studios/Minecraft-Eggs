@@ -1,5 +1,11 @@
 .git
 .github
 *.md
+*.log
 LICENSE
 README.md
+smoke-test.sh
+egg-minecraft-multi.json
+multi-mc.conf
+.dockerignore
+Dockerfile
