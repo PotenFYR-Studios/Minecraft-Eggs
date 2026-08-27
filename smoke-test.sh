@@ -68,5 +68,35 @@ else
 fi
 
 echo
+echo "== test 3: kill-button path - server ignores stop, SIGTERM then SIGKILL, exit still 0 =="
+mkdir -p "$WORK/stub"
+printf '#!/bin/bash\ntrap "" TERM INT\nsleep 600\n' > "$WORK/stub/java"
+chmod +x "$WORK/stub/java"
+PATH="$WORK/stub:$WORK/bin:$PATH" SERVER_TYPE=paper bash "$RUNSH" </dev/null \
+    >"$WORK/t3.log" 2>&1 &
+pid=$!
+sleep 3
+kill -TERM "$pid"
+t3ok=""
+for _ in $(seq 1 75); do
+    kill -0 "$pid" 2>/dev/null || { t3ok=yes; break; }
+    sleep 1
+done
+if [ "$t3ok" = yes ]; then
+    wait "$pid"; rc3=$?
+    if [ "$rc3" -eq 0 ] && grep -qa "force killing" "$WORK/t3.log"; then
+        echo "PASS: hung server SIGTERM->SIGKILL handled, launcher exit=0 (no false 'crashed')"
+    else
+        echo "FAIL: exit=$rc3 or missing force-kill step"
+        sed 's/\x1b\[[0-9;]*m//g' "$WORK/t3.log" | tail -6
+        fail=1
+    fi
+else
+    echo "FAIL: survived kill sequence beyond grace window"
+    kill -KILL "$pid" 2>/dev/null
+    fail=1
+fi
+
+echo
 [ "$fail" -eq 0 ] && echo "ALL TESTS PASSED" || echo "SOME TESTS FAILED"
 exit $fail
