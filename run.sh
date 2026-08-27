@@ -122,7 +122,8 @@ is_valid_type() { case " ${VALID_TYPES} " in *" $1 "*) return 0 ;; *) return 1 ;
 TYPE=$(echo "${SERVER_TYPE:-vanilla}" | tr '[:upper:]' '[:lower:]')
 
 elog "=== launch: type=${TYPE} mc=${MINECRAFT_VERSION:-latest} mem=${SERVER_MEMORY:-1024} java=${JAVA_VERSION:-auto} ==="
-trap 'ec=$?; [ "${ec}" -ne 0 ] && elog "launcher terminated abnormally (code ${ec})"; exit ${ec}' EXIT
+# Only log abnormal exits; graceful stops (0,130,143) are not errors
+trap 'ec=$?; if [ "${ec}" -ne 0 ] && [ "${ec}" -ne 130 ] && [ "${ec}" -ne 143 ]; then elog "launcher terminated abnormally (code ${ec})"; fi; exit ${ec}' EXIT
 [ -z "${TYPE}" ] && TYPE="vanilla"
 
 if ! is_valid_type "${TYPE}"; then
@@ -207,22 +208,182 @@ auto_install_if_needed() {
 auto_install_if_needed
 
 # ---------------------------------------------------------------------------
-# Non-Java server types
+# Graceful shutdown helpers (fixes stop/restart hanging for ALL languages)
+# ---------------------------------------------------------------------------
+# Panel sends "stop" via stdin, then SIGTERM, then SIGKILL.
+# This unified handler works for every SERVER_TYPE.
+SERVER_PID=""
+CAT_PID=""
+TRANSLATOR_PID=""
+FIFO_PATH="/tmp/mc-stdin.fifo"
+FIFO_TRANSLATED="/tmp/mc-stdin-translated.fifo"
+EXIT_STATUS=0
+SHUTDOWN_INITIATED=0
+
+cleanup_fifo() {
+    rm -f "${FIFO_PATH}" "${FIFO_TRANSLATED}" 2>/dev/null || true
+    if [ -n "${CAT_PID}" ]; then
+        kill "${CAT_PID}" 2>/dev/null || true
+        wait "${CAT_PID}" 2>/dev/null || true
+        CAT_PID=""
+    fi
+    if [ -n "${TRANSLATOR_PID}" ]; then
+        kill "${TRANSLATOR_PID}" 2>/dev/null || true
+        wait "${TRANSLATOR_PID}" 2>/dev/null || true
+        TRANSLATOR_PID=""
+    fi
+}
+
+# Send stop command to server via FIFO (non-blocking)
+send_stop_command() {
+    if [ ! -p "${FIFO_PATH}" ]; then
+        return 1
+    fi
+    case "${TYPE}" in
+        bungeecord|waterfall|velocity) printf 'end\n' > "${FIFO_PATH}" 2>/dev/null || true ;;
+        *) printf 'stop\n' > "${FIFO_PATH}" 2>/dev/null || true ;;
+    esac
+}
+
+# Signal handler: initiate graceful shutdown, don't wait here
+handle_signal() {
+    local sig="$1"
+    if [ "${SHUTDOWN_INITIATED}" -eq 1 ]; then
+        return
+    fi
+    SHUTDOWN_INITIATED=1
+    log "Received ${sig}, initiating graceful shutdown..."
+    send_stop_command
+    # Send SIGTERM to server process group to ensure all children get it
+    if [ -n "${SERVER_PID}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
+        kill -TERM "${SERVER_PID}" 2>/dev/null || true
+    fi
+}
+
+trap 'handle_signal TERM' TERM
+trap 'handle_signal INT' INT
+# Remove the earlier EXIT trap that logged graceful stops as crashes
+trap - EXIT
+
+# Helper: launch any command with FIFO stdin forwarding and optional
+# stop->end translation for BungeeCord-family proxies.
+# Uses two FIFOs when translation is needed so SERVER_PID is always the
+# actual server process (java/php/bedrock) and signals kill the right PID.
+TRANSLATOR_PID=""
+
+launch_with_fifo() {
+    local cmd="$1"
+    local translate="$2" # 1 = translate stop->end
+    rm -f "${FIFO_PATH}" "${FIFO_TRANSLATED}" 2>/dev/null || true
+    mkfifo "${FIFO_PATH}" 2>/dev/null || true
+    if [ "${translate}" = "1" ]; then
+        mkfifo "${FIFO_TRANSLATED}" 2>/dev/null || true
+        # Translator: FIFO -> translated FIFO (stop -> end)
+        ( while IFS= read -r line || [ -n "${line}" ]; do
+            if [ "${line}" = "stop" ]; then line="end"; fi
+            printf '%s\n' "${line}"
+          done < "${FIFO_PATH}" > "${FIFO_TRANSLATED}" ) &
+        TRANSLATOR_PID=$!
+        # Server reads from translated FIFO; exec replaces shell with server binary
+        ( bash -c "exec ${cmd}" < "${FIFO_TRANSLATED}" ) &
+        SERVER_PID=$!
+    else
+        TRANSLATOR_PID=""
+        ( bash -c "exec ${cmd}" < "${FIFO_PATH}" ) &
+        SERVER_PID=$!
+    fi
+    # Forward container stdin (panel's "stop" command) to FIFO
+    # Start cat FIRST so it's ready to forward panel's "stop" immediately
+    cat > "${FIFO_PATH}" &
+    CAT_PID=$!
+    
+    # Wait for server with timeout-based force kill
+    local wait_count=0
+    local max_wait=30  # Total seconds to wait before SIGKILL
+    while kill -0 "${SERVER_PID}" 2>/dev/null; do
+        # Check if server exited
+        if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
+            break
+        fi
+        sleep 1
+        wait_count=$((wait_count + 1))
+        
+        # After 20 seconds, send SIGTERM if not already sent via signal handler
+        if [ "${wait_count}" -eq 20 ] && [ "${SHUTDOWN_INITIATED}" -eq 0 ]; then
+            log "Server not responding to stop command, sending SIGTERM..."
+            kill -TERM "${SERVER_PID}" 2>/dev/null || true
+        fi
+        
+        # After 30 seconds total, force kill
+        if [ "${wait_count}" -ge "${max_wait}" ]; then
+            warn "Server still running after ${max_wait}s, force killing (SIGKILL)..."
+            kill -KILL "${SERVER_PID}" 2>/dev/null || true
+            sleep 1
+            break
+        fi
+    done
+    
+    wait "${SERVER_PID}" 2>/dev/null
+    EXIT_STATUS=$?
+    
+    # Clean up forwarders
+    if [ -n "${CAT_PID}" ]; then
+        kill "${CAT_PID}" 2>/dev/null || true
+        wait "${CAT_PID}" 2>/dev/null || true
+        CAT_PID=""
+    fi
+    if [ -n "${TRANSLATOR_PID}" ]; then
+        kill "${TRANSLATOR_PID}" 2>/dev/null || true
+        wait "${TRANSLATOR_PID}" 2>/dev/null || true
+        TRANSLATOR_PID=""
+    fi
+    rm -f "${FIFO_PATH}" "${FIFO_TRANSLATED}" 2>/dev/null || true
+    return ${EXIT_STATUS}
+}
+
+# ---------------------------------------------------------------------------
+# Non-Java server types (now with graceful shutdown for all)
 # ---------------------------------------------------------------------------
 case "${TYPE}" in
     bedrock)
         [ ! -f ./bedrock_server ] && { error "bedrock_server executable not found in $(pwd)"; sleep 3; exit 1; }
         chmod +x ./bedrock_server 2>/dev/null || true
-        exec env LD_LIBRARY_PATH=. ./bedrock_server
+        log "Executing: ./bedrock_server (LD_LIBRARY_PATH=.)"
+        launch_with_fifo "env LD_LIBRARY_PATH=. ./bedrock_server" 0
+        EXIT_STATUS=$?
+        if [ ${EXIT_STATUS} -ne 0 ] && [ ${EXIT_STATUS} -ne 130 ] && [ ${EXIT_STATUS} -ne 143 ]; then
+            elog "=== CRASH: exit=${EXIT_STATUS} type=${TYPE} ==="
+            print_crash_diagnostics "${EXIT_STATUS}" 2>/dev/null || true
+        else
+            elog "=== server process exited cleanly (code ${EXIT_STATUS}) ==="
+        fi
+        exit ${EXIT_STATUS}
         ;;
     pocketmine)
         [ ! -f ./PocketMine-MP.phar ] && { error "PocketMine-MP.phar not found in $(pwd)"; sleep 3; exit 1; }
-        exec php ./PocketMine-MP.phar --no-wizard
+        log "Executing: php PocketMine-MP.phar"
+        launch_with_fifo "php ./PocketMine-MP.phar --no-wizard" 0
+        EXIT_STATUS=$?
+        if [ ${EXIT_STATUS} -ne 0 ] && [ ${EXIT_STATUS} -ne 130 ] && [ ${EXIT_STATUS} -ne 143 ]; then
+            elog "=== CRASH: exit=${EXIT_STATUS} type=${TYPE} ==="
+            print_crash_diagnostics "${EXIT_STATUS}" 2>/dev/null || true
+        else
+            elog "=== server process exited cleanly (code ${EXIT_STATUS}) ==="
+        fi
+        exit ${EXIT_STATUS}
         ;;
     custom)
         if [ -n "${CUSTOM_COMMAND:-}" ]; then
             log "Executing custom command: ${CUSTOM_COMMAND}"
-            exec bash -c "${CUSTOM_COMMAND}"
+            # Custom commands may be any language; try graceful stop then SIGTERM
+            launch_with_fifo "${CUSTOM_COMMAND}" 0
+            EXIT_STATUS=$?
+            if [ ${EXIT_STATUS} -ne 0 ] && [ ${EXIT_STATUS} -ne 130 ] && [ ${EXIT_STATUS} -ne 143 ]; then
+                elog "=== CRASH: exit=${EXIT_STATUS} type=${TYPE} ==="
+            else
+                elog "=== server process exited cleanly (code ${EXIT_STATUS}) ==="
+            fi
+            exit ${EXIT_STATUS}
         fi
         ;;
 esac
@@ -335,18 +496,15 @@ print_crash_diagnostics() {
 printf "  4. Full launcher/crash history is saved in error.log (panel File Manager).\n"    printf "${C_RED}${C_BOLD}%s${C_RESET}\n\n" "${divider}"
 }
 
-# BungeeCord-family proxies stop with "end" instead of "stop". Translate the
-# panel's stop command on the fly so one stop command works for every type.
+# Unified Java launch with graceful shutdown for ALL Java types.
+# BungeeCord-family proxies use "end" instead of "stop" - translated automatically.
 case "${TYPE}" in
     bungeecord | waterfall | velocity)
-        (while IFS= read -r line; do
-            if [ "${line}" = "stop" ]; then line="end"; fi
-            printf '%s\n' "${line}"
-        done) | bash -c "${JAVA_CMD}"
-        EXIT_STATUS="${PIPESTATUS[1]:-$?}"
+        launch_with_fifo "${JAVA_CMD}" 1
+        EXIT_STATUS=$?
         ;;
     *)
-        bash -c "${JAVA_CMD}"
+        launch_with_fifo "${JAVA_CMD}" 0
         EXIT_STATUS=$?
         ;;
 esac

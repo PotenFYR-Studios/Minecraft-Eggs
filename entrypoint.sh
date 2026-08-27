@@ -363,4 +363,8 @@ if echo "${PARSED}" | grep -q "java " && [ ! -f "${SERVER_JARFILE:-server.jar}" 
 fi
 
 log "${PARSED}"
-exec bash -c "${PARSED}"
+# Use 'exec' inside bash -c so the server (via run.sh) becomes PID 1 and
+# receives SIGTERM/SIGINT directly. Without the inner exec, PID 1 would
+# remain a shell that does not forward signals, causing stop/restart to hang
+# until the panel force-kills the container.
+exec bash -c "exec ${PARSED}"
