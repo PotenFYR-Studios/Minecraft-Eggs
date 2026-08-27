@@ -24,6 +24,7 @@ C_GREEN='\033[32m'
 C_YELLOW='\033[33m'
 C_RED='\033[31m'
 C_MAGENTA='\033[35m'
+C_BLUE='\033[34m'
 C_DIM='\033[2m'
 
 # Shift out redundant container entrypoint invocations from Docker CMD

@@ -208,6 +208,71 @@ auto_install_if_needed() {
 auto_install_if_needed
 
 # ---------------------------------------------------------------------------
+# Automated crash diagnostics (defined BEFORE first use: the non-Java launch
+# cases below run before any later definition in the file would exist).
+# ---------------------------------------------------------------------------
+print_crash_diagnostics() {
+    local code="$1"
+    local divider
+    divider=$(printf '%*s' 62 '' | tr ' ' '=')
+    local sub_divider
+    sub_divider=$(printf '%*s' 62 '' | tr ' ' '-')
+
+    printf "\n${C_RED}${C_BOLD}%s${C_RESET}\n" "${divider}"
+    printf "${C_RED}${C_BOLD}  [CRASH DETECTED] Server process terminated abnormally (Exit code: %s)${C_RESET}\n" "${code}"
+    printf "${C_RED}${C_BOLD}%s${C_RESET}\n" "${divider}"
+
+    printf "  ${C_YELLOW}${C_BOLD}Context Summary:${C_RESET}\n"
+    printf "  • Software   : %s (%s)\n" "${TYPE}" "${MINECRAFT_VERSION:-latest}"
+    printf "  • Java       : %s\n" "$(java -version 2>&1 | head -n1 || echo 'Java not found')"
+    printf "  • Memory     : %s MB\n" "${SERVER_MEMORY:-1024}"
+    printf "  • Directory  : %s\n" "${SERVER_DIR:-$(pwd)}"
+    printf "  • Disk Free  : %s\n" "$(df -h . 2>/dev/null | awk 'NR==2 {print $4}' || echo 'unknown')"
+
+    printf "${C_DIM}%s${C_RESET}\n" "${sub_divider}"
+    printf "  ${C_GREEN}${C_BOLD}Automated Diagnostics:${C_RESET}\n"
+
+    # 1. Check EULA
+    if [ -f eula.txt ] && grep -qi "eula=false" eula.txt; then
+        printf "  ${C_YELLOW}⚠ EULA Not Accepted:${C_RESET} eula.txt contains eula=false. Accept EULA in panel or set eula=true.\n"
+    elif [ ! -f eula.txt ] && [ "${TYPE}" != "bedrock" ] && [ "${TYPE}" != "pocketmine" ] && [ "${TYPE}" != "velocity" ] && [ "${TYPE}" != "waterfall" ] && [ "${TYPE}" != "bungeecord" ]; then
+        printf "  ${C_YELLOW}⚠ EULA Missing:${C_RESET} Server exited on initial startup to generate eula.txt. Accept EULA and start again.\n"
+    fi
+
+    # 2. Check Out of Memory
+    if [ "${code}" -eq 137 ]; then
+        printf "  ${C_RED}⚠ Out Of Memory (OOM Killer):${C_RESET} Container exceeded memory limit (${SERVER_MEMORY:-1024} MB). Increase server memory in panel.\n"
+    fi
+
+    # 3. Check for crash reports / latest logs
+    if [ -d crash-reports ]; then
+        local latest_crash
+        latest_crash=$(ls -t crash-reports/crash-*.txt 2>/dev/null | head -n1)
+        if [ -n "${latest_crash}" ]; then
+            printf "  ${C_YELLOW}⚠ Crash Report Found:${C_RESET} %s\n" "${latest_crash}"
+            printf "  ${C_DIM}----------------------------------------${C_RESET}\n"
+            grep -E '^(Description|Caused by|java\.lang\.)' "${latest_crash}" 2>/dev/null | head -n6 | sed 's/^/    /'
+            printf "  ${C_DIM}----------------------------------------${C_RESET}\n"
+        fi
+    elif [ -f logs/latest.log ]; then
+        local error_lines
+        error_lines=$(grep -iE '(error|exception|fatal|failed)' logs/latest.log 2>/dev/null | tail -n5)
+        if [ -n "${error_lines}" ]; then
+            printf "  ${C_YELLOW}⚠ Recent Errors in logs/latest.log:${C_RESET}\n"
+            printf "${C_DIM}%s${C_RESET}\n" "${error_lines}" | sed 's/^/    /'
+        fi
+    fi
+
+    printf "${C_DIM}%s${C_RESET}\n" "${sub_divider}"
+    printf "  ${C_GREEN}${C_BOLD}Next Steps to Resolve:${C_RESET}\n"
+    printf "  1. Inspect full log output above for specific mod/plugin incompatibilities.\n"
+    printf "  2. If Java version mismatch occurs, select compatible JAVA_VERSION in panel Variables.\n"
+    printf "  3. Trigger 'Reinstall Server' if server files or libraries are corrupted.\n"
+    printf "  4. Full launcher/crash history is saved in error.log (panel File Manager).\n"
+    printf "${C_RED}${C_BOLD}%s${C_RESET}\n\n" "${divider}"
+}
+
+# ---------------------------------------------------------------------------
 # Graceful shutdown helpers (fixes stop/restart hanging for ALL languages)
 # ---------------------------------------------------------------------------
 # Panel sends "stop" via stdin, then SIGTERM, then SIGKILL.
@@ -302,20 +367,20 @@ launch_with_fifo() {
     else
         rm -f "${FIFO_PATH}" 2>/dev/null || true
         mkfifo "${FIFO_PATH}" 2>/dev/null || true
-        # Keep a READER on the FIFO at all times so writes to it never block:
-        # this background cat consumes anything nobody else reads (EOF-safe).
-        cat < "${FIFO_PATH}" > /dev/null &
-        DRAIN_PID=$!
         # Translator: panel stdin -> FIFO (stop -> end for BungeeCord-family)
-        # If panel stdin EOFs early (non-interactive runs), the translator
-        # exits; the drain reader above keeps the FIFO usable.
+        # This is the ONLY reader of the FIFO besides the server itself, so a
+        # console line can never be stolen by a helper process. If panel stdin
+        # EOFs early (non-interactive runs), the translator exits silently.
         ( while IFS= read -r line || [ -n "${line}" ]; do
               [ "${line}" = "stop" ] && line="end"
               printf '%s\n' "${line}"
           done > "${FIFO_PATH}" ) &
         TRANSLATOR_PID=$!
-        # Hold the write end open so the server doesn't see EOF early.
-        exec 3>"${FIFO_PATH}" 2>/dev/null || true
+        # Hold our OWN write end open (read-write: `<>` never blocks on open,
+        # unlike `>` which waits for a reader and can deadlock with the
+        # translator's blocked write-open). Closing it later is what
+        # terminates the server's stdin reader cleanly at shutdown.
+        exec 3<>"${FIFO_PATH}" 2>/dev/null || true
         ( bash -c "exec ${cmd}" < "${FIFO_PATH}" ) &
         SERVER_PID=$!
     fi
@@ -324,10 +389,14 @@ launch_with_fifo() {
     # 30s grace (console stop), then SIGTERM, then SIGKILL 15s later. Panels
     # typically force-kill the container ~60s after Stop, so this finishes
     # well inside that window while still giving big servers time to save.
+    # `sleep 1 &` + wait: the background sleep is killable, so a signal that
+    # arrives mid-loop isn't delayed by a blocked foreground sleep.
     local grace_count=0
     local grace_max=30  # seconds of grace after stop before SIGTERM
     while kill -0 "${SERVER_PID}" 2>/dev/null; do
-        sleep 1
+        sleep 1 &
+        local sleep_pid=$!
+        wait "${sleep_pid}" 2>/dev/null
         if [ "${SHUTDOWN_INITIATED}" -eq 1 ]; then
             grace_count=$((grace_count + 1))
             if [ "${grace_count}" -eq "${grace_max}" ]; then
@@ -342,9 +411,22 @@ launch_with_fifo() {
             fi
         fi
     done
-    
+
     wait "${SERVER_PID}" 2>/dev/null
     EXIT_STATUS=$?
+
+    # A server that exited BECAUSE of our stop request (SIGTERM=143 /
+    # SIGKILL=137 from the grace timer, or 130=SIGINT) must be reported to
+    # the panel as a CLEAN stop. If we reported 143/137 the panel would mark
+    # the server as "crashed" on Stop/Restart instead of gracefully offline.
+    if [ "${SHUTDOWN_INITIATED}" -eq 1 ]; then
+        case "${EXIT_STATUS}" in
+            130 | 137 | 143)
+                log "Server stopped gracefully (exit ${EXIT_STATUS} after stop request)."
+                EXIT_STATUS=0
+                ;;
+        esac
+    fi
 
     # Close our held write end and clean up helper processes
     exec 3>&- 2>/dev/null || true
@@ -453,70 +535,6 @@ fi
 
 log "Executing: ${JAVA_CMD}"
 log "JVM flags source: ${FLAGS_SOURCE}"
-
-# ---------------------------------------------------------------------------
-# Server process execution & automated crash diagnostics
-# ---------------------------------------------------------------------------
-print_crash_diagnostics() {
-    local code="$1"
-    local divider
-    divider=$(printf '%*s' 62 '' | tr ' ' '=')
-    local sub_divider
-    sub_divider=$(printf '%*s' 62 '' | tr ' ' '-')
-
-    printf "\n${C_RED}${C_BOLD}%s${C_RESET}\n" "${divider}"
-    printf "${C_RED}${C_BOLD}  [CRASH DETECTED] Server process terminated abnormally (Exit code: %s)${C_RESET}\n" "${code}"
-    printf "${C_RED}${C_BOLD}%s${C_RESET}\n" "${divider}"
-    
-    printf "  ${C_YELLOW}${C_BOLD}Context Summary:${C_RESET}\n"
-    printf "  • Software   : %s (%s)\n" "${TYPE}" "${MINECRAFT_VERSION:-latest}"
-    printf "  • Java       : %s\n" "$(java -version 2>&1 | head -n1 || echo 'Java not found')"
-    printf "  • Memory     : %s MB\n" "${SERVER_MEMORY:-1024}"
-    printf "  • Directory  : %s\n" "${SERVER_DIR:-$(pwd)}"
-    printf "  • Disk Free  : %s\n" "$(df -h . 2>/dev/null | awk 'NR==2 {print $4}' || echo 'unknown')"
-
-    printf "${C_DIM}%s${C_RESET}\n" "${sub_divider}"
-    printf "  ${C_GREEN}${C_BOLD}Automated Diagnostics:${C_RESET}\n"
-
-    # 1. Check EULA
-    if [ -f eula.txt ] && grep -qi "eula=false" eula.txt; then
-        printf "  ${C_YELLOW}⚠ EULA Not Accepted:${C_RESET} eula.txt contains eula=false. Accept EULA in panel or set eula=true.\n"
-    elif [ ! -f eula.txt ] && [ "${TYPE}" != "bedrock" ] && [ "${TYPE}" != "pocketmine" ] && [ "${TYPE}" != "velocity" ] && [ "${TYPE}" != "waterfall" ] && [ "${TYPE}" != "bungeecord" ]; then
-        printf "  ${C_YELLOW}⚠ EULA Missing:${C_RESET} Server exited on initial startup to generate eula.txt. Accept EULA and start again.\n"
-    fi
-
-    # 2. Check Out of Memory
-    if [ "${code}" -eq 137 ]; then
-        printf "  ${C_RED}⚠ Out Of Memory (OOM Killer):${C_RESET} Container exceeded memory limit (${SERVER_MEMORY:-1024} MB). Increase server memory in panel.\n"
-    fi
-
-    # 3. Check for crash reports / latest logs
-    if [ -d crash-reports ]; then
-        local latest_crash
-        latest_crash=$(ls -t crash-reports/crash-*.txt 2>/dev/null | head -n1)
-        if [ -n "${latest_crash}" ]; then
-            printf "  ${C_YELLOW}⚠ Crash Report Found:${C_RESET} %s\n" "${latest_crash}"
-            printf "  ${C_DIM}----------------------------------------${C_RESET}\n"
-            grep -E '^(Description|Caused by|java\.lang\.)' "${latest_crash}" 2>/dev/null | head -n6 | sed 's/^/    /'
-            printf "  ${C_DIM}----------------------------------------${C_RESET}\n"
-        fi
-    elif [ -f logs/latest.log ]; then
-        local error_lines
-        error_lines=$(grep -iE '(error|exception|fatal|failed)' logs/latest.log 2>/dev/null | tail -n5)
-        if [ -n "${error_lines}" ]; then
-            printf "  ${C_YELLOW}⚠ Recent Errors in logs/latest.log:${C_RESET}\n"
-            printf "${C_DIM}%s${C_RESET}\n" "${error_lines}" | sed 's/^/    /'
-        fi
-    fi
-
-    printf "${C_DIM}%s${C_RESET}\n" "${sub_divider}"
-    printf "  ${C_GREEN}${C_BOLD}Next Steps to Resolve:${C_RESET}\n"
-    printf "  1. Inspect full log output above for specific mod/plugin incompatibilities.\n"
-    printf "  2. If Java version mismatch occurs, select compatible JAVA_VERSION in panel Variables.\n"
-    printf "  3. Trigger 'Reinstall Server' if server files or libraries are corrupted.\n"
-    printf "  4. Full launcher/crash history is saved in error.log (panel File Manager).\n"
-    printf "${C_RED}${C_BOLD}%s${C_RESET}\n\n" "${divider}"
-}
 
 # Unified Java launch with graceful shutdown for ALL Java types.
 # BungeeCord-family proxies use "end" instead of "stop" - translated automatically.
