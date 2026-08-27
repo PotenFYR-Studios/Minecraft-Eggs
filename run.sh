@@ -214,6 +214,7 @@ auto_install_if_needed
 # This unified handler works for every SERVER_TYPE.
 SERVER_PID=""
 CAT_PID=""
+DRAIN_PID=""
 TRANSLATOR_PID=""
 FIFO_PATH="/tmp/mc-stdin.fifo"
 FIFO_TRANSLATED="/tmp/mc-stdin-translated.fifo"
@@ -227,6 +228,11 @@ cleanup_fifo() {
         wait "${CAT_PID}" 2>/dev/null || true
         CAT_PID=""
     fi
+    if [ -n "${DRAIN_PID}" ]; then
+        kill "${DRAIN_PID}" 2>/dev/null || true
+        wait "${DRAIN_PID}" 2>/dev/null || true
+        DRAIN_PID=""
+    fi
     if [ -n "${TRANSLATOR_PID}" ]; then
         kill "${TRANSLATOR_PID}" 2>/dev/null || true
         wait "${TRANSLATOR_PID}" 2>/dev/null || true
@@ -234,18 +240,27 @@ cleanup_fifo() {
     fi
 }
 
-# Send stop command to server via FIFO (non-blocking)
+# Send stop command to server via FIFO (only used by proxy types whose
+# stdin is routed through the translation FIFO). Also arms the shutdown
+# timer so the grace period starts counting no matter how shutdown was
+# requested (panel signal, console "stop", or Kill button).
 send_stop_command() {
-    if [ ! -p "${FIFO_PATH}" ]; then
-        return 1
+    SHUTDOWN_INITIATED=1
+    if [ -p "${FIFO_PATH:-}" ]; then
+        case "${TYPE}" in
+            bungeecord|waterfall|velocity) printf 'end\n' > "${FIFO_PATH}" 2>/dev/null || true ;;
+            *) printf 'stop\n' > "${FIFO_PATH}" 2>/dev/null || true ;;
+        esac
+    else
+        # No FIFO (direct-stdin servers): SIGTERM triggers the JVM shutdown
+        # hooks, which save the world and stop the server cleanly.
+        if [ -n "${SERVER_PID}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
+            kill -TERM "${SERVER_PID}" 2>/dev/null || true
+        fi
     fi
-    case "${TYPE}" in
-        bungeecord|waterfall|velocity) printf 'end\n' > "${FIFO_PATH}" 2>/dev/null || true ;;
-        *) printf 'stop\n' > "${FIFO_PATH}" 2>/dev/null || true ;;
-    esac
 }
 
-# Signal handler: initiate graceful shutdown, don't wait here
+# Signal handler: request graceful shutdown.
 handle_signal() {
     local sig="$1"
     if [ "${SHUTDOWN_INITIATED}" -eq 1 ]; then
@@ -253,84 +268,90 @@ handle_signal() {
     fi
     SHUTDOWN_INITIATED=1
     log "Received ${sig}, initiating graceful shutdown..."
-    send_stop_command
-    # Send SIGTERM to server process group to ensure all children get it
-    if [ -n "${SERVER_PID}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
-        kill -TERM "${SERVER_PID}" 2>/dev/null || true
-    fi
+    send_stop_command || true
 }
 
 trap 'handle_signal TERM' TERM
 trap 'handle_signal INT' INT
-# Remove the earlier EXIT trap that logged graceful stops as crashes
 trap - EXIT
 
-# Helper: launch any command with FIFO stdin forwarding and optional
-# stop->end translation for BungeeCord-family proxies.
-# Uses two FIFOs when translation is needed so SERVER_PID is always the
-# actual server process (java/php/bedrock) and signals kill the right PID.
-TRANSLATOR_PID=""
-
+# Launch the server as a background child so signals land on the launcher,
+# which orchestrates graceful shutdown (console command -> SIGTERM -> SIGKILL).
+#
+#   translate=0 : server inherits the panel's stdin DIRECTLY (same contract
+#                 as official Pterodactyl yolks) - the panel's "stop" command
+#                 reaches the server console natively. No FIFOs involved.
+#   translate=1 : BungeeCord-family proxies expect "end" instead of "stop".
+#                 A translator reads panel stdin and writes converted lines
+#                 into a FIFO the server reads. The parent keeps the FIFO's
+#                 write end open (fd 3) so the server never sees a premature
+#                 EOF, and closing it later terminates the translator cleanly.
 launch_with_fifo() {
     local cmd="$1"
-    local translate="$2" # 1 = translate stop->end
-    rm -f "${FIFO_PATH}" "${FIFO_TRANSLATED}" 2>/dev/null || true
-    mkfifo "${FIFO_PATH}" 2>/dev/null || true
-    if [ "${translate}" = "1" ]; then
-        mkfifo "${FIFO_TRANSLATED}" 2>/dev/null || true
-        # Translator: FIFO -> translated FIFO (stop -> end)
-        ( while IFS= read -r line || [ -n "${line}" ]; do
-            if [ "${line}" = "stop" ]; then line="end"; fi
-            printf '%s\n' "${line}"
-          done < "${FIFO_PATH}" > "${FIFO_TRANSLATED}" ) &
-        TRANSLATOR_PID=$!
-        # Server reads from translated FIFO; exec replaces shell with server binary
-        ( bash -c "exec ${cmd}" < "${FIFO_TRANSLATED}" ) &
+    local translate="$2"
+
+    if [ "${translate}" != "1" ]; then
+        TRANSLATOR_PID=""
+        CAT_PID=""
+        # CRITICAL: an async (background) command in a non-job-control shell
+        # gets its stdin redirected to /dev/null by POSIX rules. Without the
+        # explicit `<&0` the server would never receive the panel's console
+        # input ("stop"/"end") and would see instant EOF instead.
+        bash -c "exec ${cmd}" <&0 &
         SERVER_PID=$!
     else
-        TRANSLATOR_PID=""
+        rm -f "${FIFO_PATH}" 2>/dev/null || true
+        mkfifo "${FIFO_PATH}" 2>/dev/null || true
+        # Keep a READER on the FIFO at all times so writes to it never block:
+        # this background cat consumes anything nobody else reads (EOF-safe).
+        cat < "${FIFO_PATH}" > /dev/null &
+        DRAIN_PID=$!
+        # Translator: panel stdin -> FIFO (stop -> end for BungeeCord-family)
+        # If panel stdin EOFs early (non-interactive runs), the translator
+        # exits; the drain reader above keeps the FIFO usable.
+        ( while IFS= read -r line || [ -n "${line}" ]; do
+              [ "${line}" = "stop" ] && line="end"
+              printf '%s\n' "${line}"
+          done > "${FIFO_PATH}" ) &
+        TRANSLATOR_PID=$!
+        # Hold the write end open so the server doesn't see EOF early.
+        exec 3>"${FIFO_PATH}" 2>/dev/null || true
         ( bash -c "exec ${cmd}" < "${FIFO_PATH}" ) &
         SERVER_PID=$!
     fi
-    # Forward container stdin (panel's "stop" command) to FIFO
-    # Start cat FIRST so it's ready to forward panel's "stop" immediately
-    cat > "${FIFO_PATH}" &
-    CAT_PID=$!
-    
-    # Wait for server with timeout-based force kill
-    local wait_count=0
-    local max_wait=30  # Total seconds to wait before SIGKILL
+    # Wait for server. Grace-period timers only start counting once a
+    # shutdown has been initiated (stop command / signal), never at startup.
+    # 30s grace (console stop), then SIGTERM, then SIGKILL 15s later. Panels
+    # typically force-kill the container ~60s after Stop, so this finishes
+    # well inside that window while still giving big servers time to save.
+    local grace_count=0
+    local grace_max=30  # seconds of grace after stop before SIGTERM
     while kill -0 "${SERVER_PID}" 2>/dev/null; do
-        # Check if server exited
-        if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
-            break
-        fi
         sleep 1
-        wait_count=$((wait_count + 1))
-        
-        # After 20 seconds, send SIGTERM if not already sent via signal handler
-        if [ "${wait_count}" -eq 20 ] && [ "${SHUTDOWN_INITIATED}" -eq 0 ]; then
-            log "Server not responding to stop command, sending SIGTERM..."
-            kill -TERM "${SERVER_PID}" 2>/dev/null || true
-        fi
-        
-        # After 30 seconds total, force kill
-        if [ "${wait_count}" -ge "${max_wait}" ]; then
-            warn "Server still running after ${max_wait}s, force killing (SIGKILL)..."
-            kill -KILL "${SERVER_PID}" 2>/dev/null || true
-            sleep 1
-            break
+        if [ "${SHUTDOWN_INITIATED}" -eq 1 ]; then
+            grace_count=$((grace_count + 1))
+            if [ "${grace_count}" -eq "${grace_max}" ]; then
+                log "Server not responding to stop command after ${grace_max}s, sending SIGTERM..."
+                kill -TERM "${SERVER_PID}" 2>/dev/null || true
+            fi
+            if [ "${grace_count}" -ge $((grace_max + 15)) ]; then
+                warn "Server still running, force killing (SIGKILL)..."
+                kill -KILL "${SERVER_PID}" 2>/dev/null || true
+                sleep 1
+                break
+            fi
         fi
     done
     
     wait "${SERVER_PID}" 2>/dev/null
     EXIT_STATUS=$?
-    
-    # Clean up forwarders
-    if [ -n "${CAT_PID}" ]; then
-        kill "${CAT_PID}" 2>/dev/null || true
-        wait "${CAT_PID}" 2>/dev/null || true
-        CAT_PID=""
+
+    # Close our held write end and clean up helper processes
+    exec 3>&- 2>/dev/null || true
+    if [ -n "${DRAIN_PID}" ]; then
+        kill "${DRAIN_PID}" 2>/dev/null || true
+        wait "${DRAIN_PID}" 2>/dev/null || true
+        DRAIN_PID=""
     fi
     if [ -n "${TRANSLATOR_PID}" ]; then
         kill "${TRANSLATOR_PID}" 2>/dev/null || true
@@ -493,7 +514,8 @@ print_crash_diagnostics() {
     printf "  1. Inspect full log output above for specific mod/plugin incompatibilities.\n"
     printf "  2. If Java version mismatch occurs, select compatible JAVA_VERSION in panel Variables.\n"
     printf "  3. Trigger 'Reinstall Server' if server files or libraries are corrupted.\n"
-printf "  4. Full launcher/crash history is saved in error.log (panel File Manager).\n"    printf "${C_RED}${C_BOLD}%s${C_RESET}\n\n" "${divider}"
+    printf "  4. Full launcher/crash history is saved in error.log (panel File Manager).\n"
+    printf "${C_RED}${C_BOLD}%s${C_RESET}\n\n" "${divider}"
 }
 
 # Unified Java launch with graceful shutdown for ALL Java types.
