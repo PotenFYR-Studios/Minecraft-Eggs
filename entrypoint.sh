@@ -111,10 +111,86 @@ export INTERNAL_IP
 for _key in SERVER_TYPE MINECRAFT_VERSION BUILD_NUMBER LOADER_VERSION \
             SERVER_JARFILE JAVA_VERSION JAVA_FLAGS GC_TYPE MOTD MAX_PLAYERS \
             EXTRA_ARGS CUSTOM_COMMAND AUTO_UPDATE KEEP_BACKUP DEBUG \
-            GITHUB_REPO GITHUB_TAG GITHUB_ASSET; do
+            GITHUB_REPO GITHUB_TAG GITHUB_ASSET \
+            EGG_UPDATE_URL AUTO_UPDATE_EGG; do
     apply_conf "${_key}"
 done
 unset _key val
+
+# ---------------------------------------------------------------------------
+# Egg Self-Update Engine (EGG_UPDATE_URL)
+# ---------------------------------------------------------------------------
+# Launcher scripts ship inside the image; EGG_UPDATE_URL lets users pick up
+# launcher fixes without rebuilding/reinstalling. Default points at this
+# repo's own raw egg JSON. AUTO_UPDATE_EGG=0 disables the check entirely.
+#
+# Behaviour (same as the database / programming eggs):
+#   * URL ending in .json / the raw egg file -> compared against the stored
+#     hash; on change the launcher scripts are refreshed from the same repo
+#     branch (egg JSON metadata travels with the image).
+#   * URL pointing at a run.sh -> replaces the launcher directly.
+# Failure of any step is non-fatal: the previously installed launcher runs.
+EGG_UPDATE_URL="${EGG_UPDATE_URL:-https://raw.githubusercontent.com/PotenFYR-Studios/Minecraft-Eggs/main/egg-minecraft-multi.json}"
+AUTO_UPDATE_EGG="${AUTO_UPDATE_EGG:-1}"
+
+if [ "${AUTO_UPDATE_EGG}" = "1" ] && [ -n "${EGG_UPDATE_URL}" ] && [ -f /usr/local/bin/run.sh ] && command -v curl >/dev/null 2>&1; then
+    # Non-root panels (uid 988 etc.) cannot write /usr/local/bin; fall back to
+    # a user-writable override location that launcher resolution below prefers
+    # over the image copy.
+    _egg_target="/usr/local/bin/run.sh"
+    _egg_hashfile="/etc/potenfyr-egg-hash"
+    if ! [ -w "$(dirname "${_egg_target}")" ] || [ "$(id -u 2>/dev/null || echo 1)" != "0" ]; then
+        _egg_target="${SERVER_DIR}/.potenfyr/run.sh"
+        _egg_hashfile="${SERVER_DIR}/.potenfyr/egg-hash"
+        mkdir -p "${SERVER_DIR}/.potenfyr" 2>/dev/null || true
+    fi
+    _egg_tmp="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-egg.$$")"
+    if curl -fsSL --retry 2 --max-time 30 "${EGG_UPDATE_URL}" -o "${_egg_tmp}" 2>/dev/null && [ -s "${_egg_tmp}" ]; then
+        _egg_hash_new="$(sha256sum "${_egg_tmp}" 2>/dev/null | cut -d' ' -f1)"
+        _egg_hash_old="$(cat "${_egg_hashfile}" 2>/dev/null || cat /etc/potenfyr-egg-hash 2>/dev/null || true)"
+        if [ -n "${_egg_hash_new}" ] && [ "${_egg_hash_new}" != "${_egg_hash_old}" ]; then
+            case "${EGG_UPDATE_URL}" in
+                *.sh)
+                    # Direct launcher replacement
+                    if cp "${_egg_tmp}" "${_egg_target}" 2>/dev/null; then
+                        chmod +x "${_egg_target}" 2>/dev/null || true
+                        echo "${_egg_hash_new}" > "${_egg_hashfile}" 2>/dev/null || true
+                        log "Launcher self-updated from EGG_UPDATE_URL."
+                    else
+                        warn "Launcher self-update failed (target not writable): ${_egg_target}"
+                    fi
+                    ;;
+                *)
+                    # egg JSON changed -> refresh launcher from same branch
+                    _egg_base="${EGG_UPDATE_URL%/*}"
+                    _egg_launcher_ok=0
+                    if curl -fsSL --retry 2 --max-time 30 "${_egg_base}/run.sh" -o /tmp/potenfyr-run.sh 2>/dev/null && [ -s /tmp/potenfyr-run.sh ] && grep -q "Multi Minecraft" /tmp/potenfyr-run.sh 2>/dev/null; then
+                        if head -c 2 /tmp/potenfyr-run.sh | grep -q $'\r'; then
+                            sed -i 's/\r$//' /tmp/potenfyr-run.sh 2>/dev/null || true
+                        fi
+                        if cp /tmp/potenfyr-run.sh "${_egg_target}" 2>/dev/null; then
+                            chmod +x "${_egg_target}" 2>/dev/null || true
+                            _egg_launcher_ok=1
+                        fi
+                    fi
+                    if [ "${_egg_launcher_ok}" = "1" ]; then
+                        echo "${_egg_hash_new}" > "${_egg_hashfile}" 2>/dev/null || true
+                        log "Egg update detected - launcher refreshed from ${_egg_base}."
+                    else
+                        warn "Egg update detected but launcher refresh failed - continuing with installed launcher."
+                    fi
+                    rm -f /tmp/potenfyr-run.sh 2>/dev/null || true
+                    ;;
+            esac
+        else
+            log "Egg is up to date."
+        fi
+    else
+        warn "EGG_UPDATE_URL fetch failed - continuing with installed launcher."
+    fi
+    rm -f "${_egg_tmp}" 2>/dev/null || true
+    unset _egg_tmp _egg_hash_new _egg_hash_old _egg_target _egg_hashfile _egg_base _egg_launcher_ok
+fi
 
 if [ "${DEBUG:-0}" = "1" ]; then
     warn "DEBUG mode enabled - printing resolved environment (secrets excluded):"
@@ -349,7 +425,13 @@ PARSED=$(eval echo "\"${PARSED}\"")
 # Normalize any run.sh execution variants (old and new panel formats) to internal binary
 case "${PARSED}" in
     "bash run.sh" | "run.sh" | "./run.sh" | "bash ./run.sh" | "/run.sh" | "bash /run.sh" | "")
-        PARSED="/usr/local/bin/run.sh"
+        # Prefer the self-update override written by the EGG_UPDATE_URL engine
+        # (non-root panels cannot write /usr/local/bin), else the image copy.
+        if [ -f "${SERVER_DIR}/.potenfyr/run.sh" ]; then
+            PARSED="${SERVER_DIR}/.potenfyr/run.sh"
+        else
+            PARSED="/usr/local/bin/run.sh"
+        fi
         ;;
 esac
 

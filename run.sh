@@ -326,6 +326,13 @@ send_stop_command() {
 }
 
 # Signal handler: request graceful shutdown.
+#
+# IMPORTANT: this handler must NOT block. It only arms the shutdown (sets
+# SHUTDOWN_INITIATED=1 and nudges the server); the wait loop below enforces
+# the grace period, SIGTERM escalation and SIGKILL. If the handler itself
+# waited on the server, a server that ignores the stop command would keep the
+# launcher blocked inside the trap - the panel would sit on "stopping" forever
+# while the server keeps running (exactly the bug this fixes).
 handle_signal() {
     local sig="$1"
     if [ "${SHUTDOWN_INITIATED}" -eq 1 ]; then
@@ -338,7 +345,54 @@ handle_signal() {
 
 trap 'handle_signal TERM' TERM
 trap 'handle_signal INT' INT
+trap 'handle_signal HUP' HUP
+trap 'handle_signal QUIT' QUIT
 trap - EXIT
+
+# Recursively list all descendant PIDs of a process (children, grandchildren,
+# double-forked strays still inside the tree).
+get_all_child_pids() {
+    local parent="$1"
+    [ -z "${parent}" ] && return 0
+    local children
+    children=$(pgrep -P "${parent}" 2>/dev/null || true)
+    if [ -z "${children}" ] && [ -d "/proc" ]; then
+        children=$(awk -v p="${parent}" '$1 == "PPid:" && $2 == p {print FILENAME}' /proc/[0-9]*/status 2>/dev/null | awk -F/ '{print $3}' || true)
+    fi
+    for child in ${children}; do
+        get_all_child_pids "${child}"
+        echo "${child}"
+    done
+}
+
+# Terminate a process and its full tree: TERM+INT, poll up to N seconds at
+# 0.2s intervals, then SIGKILL anything still alive. Non-fatal by design.
+terminate_process_tree() {
+    local root_pid="$1"
+    local timeout="${2:-5}"
+    [ -n "${root_pid}" ] || return 0
+    [ "${root_pid}" -gt 1 ] 2>/dev/null || return 0
+    kill -0 "${root_pid}" 2>/dev/null || return 0
+
+    local pids waited=0 max_wait=$((timeout * 5))
+    pids="$(get_all_child_pids "${root_pid}") ${root_pid}"
+    for p in ${pids}; do
+        kill -TERM "${p}" 2>/dev/null || true
+        kill -INT "${p}" 2>/dev/null || true
+    done
+    while kill -0 "${root_pid}" 2>/dev/null && [ "${waited}" -lt "${max_wait}" ]; do
+        sleep 0.2
+        waited=$((waited + 1))
+    done
+    if kill -0 "${root_pid}" 2>/dev/null; then
+        pids="$(get_all_child_pids "${root_pid}") ${root_pid}"
+        for p in ${pids}; do
+            kill -KILL "${p}" 2>/dev/null || true
+        done
+        sleep 0.3
+    fi
+    wait "${root_pid}" 2>/dev/null || true
+}
 
 # Launch the server as a background child so signals land on the launcher,
 # which orchestrates graceful shutdown (console command -> SIGTERM -> SIGKILL).
@@ -404,13 +458,31 @@ launch_with_fifo() {
                 kill -TERM "${SERVER_PID}" 2>/dev/null || true
             fi
             if [ "${grace_count}" -ge $((grace_max + 15)) ]; then
-                warn "Server still running, force killing (SIGKILL)..."
-                kill -KILL "${SERVER_PID}" 2>/dev/null || true
-                sleep 1
+                warn "Server still running, force killing..."
+                terminate_process_tree "${SERVER_PID}" 5
                 break
             fi
         fi
     done
+
+    # Grace period elapsed: make sure EVERYTHING is gone. A server that
+    # ignores both the console stop command and SIGTERM (or leaves detached
+    # double-forked children behind) must not survive the stop - otherwise the
+    # panel shows "stopping" while the server keeps serving. Kill the whole
+    # tree, then sweep any PID-1 orphan the tree walk missed.
+    if [ "${SHUTDOWN_INITIATED}" -eq 1 ]; then
+        terminate_process_tree "${SERVER_PID}" 3
+        if [ -d "/proc" ]; then
+            local _me="$$" _p
+            for _p in $(ps -eo pid=,ppid= 2>/dev/null | awk -v me="${_me}" '$2 == 1 && $1 != me {print $1}'); do
+                [ -n "${_p}" ] && [ "${_p}" -gt 1 ] 2>/dev/null || continue
+                case "$(ps -o comm= -p "${_p}" 2>/dev/null)" in
+                    tee|ps|awk|sed|grep) continue ;;
+                esac
+                terminate_process_tree "${_p}" 3
+            done
+        fi
+    fi
 
     wait "${SERVER_PID}" 2>/dev/null
     EXIT_STATUS=$?
