@@ -103,9 +103,15 @@ COPY run.sh /run.sh
 COPY run.sh /usr/local/bin/run.sh
 RUN chmod +x /entrypoint.sh /usr/local/bin/entrypoint.sh /run.sh /usr/local/bin/run.sh /install.sh /usr/local/bin/install.sh /usr/local/bin/install-java.sh
 
+# Provenance stamp surfaced at boot for supportability & audit trails.
+#  Stop contract: the launcher (PID 1) traps SIGTERM/SIGINT for graceful
+#  shutdown; panels and docker stop both deliver SIGTERM first, and Wings-family
+#  daemons send their stop command as console text (handled by the launcher's
+#  stdin stop-command watcher).
+RUN echo "PotenFYR Multi Minecraft Runtime • variant=${JAVA_VERSION} • built=$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > /etc/potenfyr-version
+
 USER container
 ENV USER=container HOME=/home/container PATH="/usr/local/bin:/opt/java/21/bin:${PATH}"
 WORKDIR /home/container
-STOPSIGNAL SIGINT
-
+STOPSIGNAL SIGTERM
 CMD ["/bin/bash", "/entrypoint.sh"]

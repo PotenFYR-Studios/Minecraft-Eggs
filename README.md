@@ -234,6 +234,14 @@ They never overwrite files you edited yourself.
 | `DL_URL` | *(empty)* | ADMIN | Direct download URL that bypasses project logic |
 | `DEBUG` | `0` | ADMIN | `1` = console-level tracing of installer and launcher |
 
+### Stop behavior and console theme
+
+| Variable | Default | Who | Description |
+|---|---|---|---|
+| `PANEL_STOP_WATCHER` | `auto` | USER | `auto`/`1` = the launcher watches console input for the panel stop command (`stop`, `^C`, `end`, ...), so Stop works on Wings-family daemons that deliver stop as console text (Feather Panel included). Non-stop console lines are forwarded to the server console, so in-game commands keep working. `0` = pass stdin straight to the server (yolk contract), signals still stop it |
+| `CLI_THEME` | `prog` | USER | `prog` = PotenFYR agent theme (`</> multi-minecraft` prefixes, gradient banner, boot card); `classic` = yolk-style `[PotenFYR]` console |
+| `CLI_BANNER_GRADIENT` | `auto` | USER | Banner gradient: `auto` (random per boot), `citrus`, `aurora`, `sunset`, `ocean`, `candy`, `spectrum`, `none` |
+
 ---
 
 ## Examples cookbook
@@ -398,22 +406,48 @@ no image rebuild needed, so future Minecraft versions work even on old images.
 
 ## Error logs and diagnostics
 
-Two persistent logs live inside the server directory. They survive restarts
-and rotate automatically at ~512 KB (old copy becomes `*.old`).
+Persistent logs live inside the server directory. They survive restarts
+and rotate automatically (old copy becomes `*.old`).
 
 | File | What it contains |
 |---|---|
 | `install-error.log` | Full step-by-step trace of every install run: timestamps, function names and line numbers for each executed command |
-| `error.log` | Launcher history: every start/stop event, crashes with exit code, Java version, full launch command, EULA state, last errors from `logs/latest.log` |
+| `.logs/launcher-errors.log` | Launcher journal: every launch/stop event, crashes with exit code, Java version, launch command, EULA state, orphan sweeps, last errors from `logs/latest.log` |
+| `.logs/console.log` | Full console mirror of the current boot (rotated to `console.log.1` on the next boot) so crashes can be diagnosed even after the panel scrollback is gone |
 
 When an installation fails you do not need to re-run anything: the console
 prints a red failure report plus the **last 40 trace lines** immediately.
 When the server process crashes, the launcher prints automated diagnostics
 (EULA state, OOM detection at exit code 137, crash-report summaries,
-recent log errors) and appends everything to `error.log`.
+recent log errors, the last 12 console lines before the crash) and appends
+everything to `.logs/launcher-errors.log`.
 
-For extra verbosity set `DEBUG=1` (admin variable) to mirror the installer
-trace on the console too.
+For extra verbosity set `DEBUG=1` (admin variable) to mirror the resolved
+environment on the console too.
+
+### How panel Stop works (every panel)
+
+The launcher guarantees the Stop/Restart button always works, verified by a
+Docker test suite (`tests/panel-test.sh`, runs in CI before every publish):
+
+1. **Console stop commands** - every panel daemon (Pterodactyl, Pelican,
+   Feather, Jexactyl, Wisp) delivers the configured stop command as console
+   text on the container's stdin. A background watcher scans console input,
+   recognizes stop commands (`stop`, `^C`, `end`, `kill`, ...), including the
+   Feather-style `^C` text on TTY containers, and triggers a graceful
+   shutdown. All non-stop console lines are **forwarded to the server
+   console**, so in-game commands typed in the panel keep working.
+   `PANEL_STOP_WATCHER=0` disables the watcher and passes stdin straight to
+   the server (legacy yolk behavior).
+2. **Signals** - SIGTERM/SIGINT from panels or `docker stop` land on the
+   launcher (PID 1) and trigger the same graceful shutdown (JVM shutdown
+   hooks save the world first).
+3. **Hung servers** - a server that ignores both the stop command and SIGTERM
+   is force-killed (whole process tree) after the grace window, and a
+   container-wide sweep removes orphaned children. The panel never hangs on
+   "stopping".
+4. **Proxy translation** - BungeeCord-family proxies get `stop` translated to
+   `end` automatically.
 
 ---
 
@@ -431,6 +465,8 @@ trace on the console too.
 | Want my own JVM flags | Custom tuning | Set `JAVA_FLAGS`; server args go to `EXTRA_ARGS` |
 | Proxy ignores Stop | Proxies use `end` | Already handled: the launcher translates `stop` -> `end` |
 | Changed type, old files gone? | They are archived | Look in `archive/<old-type>-<old-version>-<timestamp>/`, delete manually when ready |
+| Panel Stop hangs on "stopping" | Daemon sends stop as console text | Fixed: the stdin stop-command watcher catches `stop`/`^C` text on pipes and TTYs (Feather Panel included) |
+| Console theme looks different | New agent theme | Set `CLI_THEME=classic` for the yolk-style console, `CLI_BANNER_GRADIENT` to change the banner gradient |
 
 ---
 
@@ -445,21 +481,24 @@ Wings daemon on the game node
       v
 entrypoint.sh
       1. loads .multi-mc.conf (persisted answers)
-      2. picks the right Java runtime (8/11/17/21/25/26 or on-demand)
-      3. prints the colored banner
-      4. runs the STARTUP command -> run.sh
+      2. detects the hosting panel (Pterodactyl / Pelican / Feather / ...)
+      3. mirrors the console into .logs/console.log
+      4. picks the right Java runtime (8/11/17/21/25/26 or on-demand)
+      5. prints the themed gradient banner
+      6. runs the STARTUP command -> run.sh
       v
 run.sh
-      5. validates settings, asks in console if something is wrong
+      5. validates settings, auto-fills sane defaults
       6. auto-installs if server files are missing (self-healing)
-      7. dispatches:
-           bedrock     -> ./bedrock_server
-           pocketmine  -> php PocketMine-MP.phar --no-wizard
-           proxies     -> java ... ("stop" translated to "end")
-           java types  -> java [tuned flags] -jar server.jar
-                         (+ @unix_args.txt for Forge/NeoForge 1.17+)
+      7. prints the boot card (type, version, Java, memory, host, ...)
+      8. dispatches:
+            bedrock     -> ./bedrock_server
+            pocketmine  -> php PocketMine-MP.phar --no-wizard
+            proxies     -> java ... ("stop" translated to "end")
+            java types  -> java [tuned flags] -jar server.jar
+                          (+ @unix_args.txt for Forge/NeoForge 1.17+)
       v
-Minecraft server process (crash diagnostics + error.log on failure)
+Minecraft server process (crash diagnostics + .logs/launcher-errors.log on failure)
 ```
 
 Installation runs in a one-shot container from the same image, as root, with
@@ -508,10 +547,14 @@ The egg is a standard `PTDL_v2` export:
 
 - **Pterodactyl 1.x**: import under Nests, works with stock Wings.
 - **Pelican 1.x**: upload the same file; Pelican understands PTDL_v2 eggs.
+- **Feather Panel**: supported - detected via its `P_SERVER_UUID_SHORT`
+  injection, and Stop works even though FeatherWings delivers the stop
+  command as console text into a TTY container (handled by the launcher's
+  stdin stop-command watcher).
 - Both use Wings-compatible daemons, so variables, the console wizard,
   archiving behavior and logging are identical everywhere.
-- The console prefix adapts: wings-based panels injecting `P_SERVER_UUID` show
-  `container@pterodactyl~`; anything else falls back to `container@panel~`.
+- The boot card shows the detected platform (Host Platform row) and panel
+  family for support diagnostics.
 - Any panel that speaks the wings HTTP API and supports docker images from
   GHCR works out of the box.
 
