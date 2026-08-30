@@ -561,12 +561,14 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# Startup banner (gradient-swept compact-slant art, PLE theme engine)
+# Startup banner (PLE theme engine: dense block art + diagonal gradient)
 # -----------------------------------------------------------------------------
-# Art with a diagonal 256-color gradient sweep. Gradient presets:
+# "MULTI MC" in the ANSI Shadow block font (62 cols, 6 rows, programmatically
+# aligned) with a diagonal 256-color gradient sweep - the same look as the
+# Prog-Language-Eggs banner. Gradient presets:
 #   citrus (brand) aurora sunset ocean candy spectrum | none = flat brand color
-# CLI_BANNER_GRADIENT picks one; "auto" (default) randomizes per boot. The
-# ASCII art is 42 cols wide and fits every panel console (no unicode glyphs).
+# CLI_BANNER_GRADIENT picks one; "auto" (default) randomizes per boot.
+# Narrow consoles fall back to the compact-slant art, then to plain text.
 print_banner() {
     printf "\n"
     if [ "${CLI_THEME}" = "classic" ]; then
@@ -616,40 +618,61 @@ print_banner() {
             local -a cs
             read -ra cs <<< "${_ramp}"
             local n=${#cs[@]} w=${#row} out="" i ci ch span
-            span=$(( (w > 1 ? w : 2) - 1 + 30 ))
+            span=$(( (w > 1 ? w : 2) - 1 + 24 ))
             for ((i = 0; i < w; i++)); do
                 ch="${row:i:1}"
                 if [ "${ch}" = " " ]; then out+=" "; continue; fi
-                ci=$(( (i + ridx * 4) * (n - 1) / span ))
+                ci=$(( (i + ridx * 5) * (n - 1) / span ))
                 (( ci >= n )) && ci=$(( n - 1 ))
                 out+="${_esc}[38;5;${cs[$ci]}m${ch}"
             done
             printf '%s%s\n' "${out}" "${C_RESET}"
         }
-        local -a _art=(
+        local -a _art_block=(
+'███╗   ███╗██╗   ██╗██╗      ████████╗██╗  ███╗   ███╗ ██████╗'
+'████╗ ████║██║   ██║██║      ╚══██╔══╝██║  ████╗ ████║██╔════╝'
+'██╔████╔██║██║   ██║██║         ██║   ██║  ██╔████╔██║██║     '
+'██║╚██╔╝██║██║   ██║██║         ██║   ██║  ██║╚██╔╝██║██║     '
+'██║ ╚═╝ ██║╚██████╔╝███████╗    ██║   ██║  ██║ ╚═╝ ██║╚██████╗'
+'╚═╝     ╚═╝ ╚═════╝ ╚══════╝    ╚═╝   ╚═╝  ╚═╝     ╚═╝ ╚═════╝'
+        )
+        local -a _art_slim=(
 '   __  ___      ____  _       __  ___    '
 '  /  |/  /_  __/ / /_(_)     /  |/  /____ '
 ' / /|_/ / / / / / __/ /_____/ /|_/ / ___/ '
 '/ /  / / /_/ / / /_/ /_____/ /  / / /__   '
 '/_/  /_/\__,_/_/\__/_/     /_/  /_/\___/   '
         )
-        local _w
+        local _w r
         _w="${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}"
-        if [ "${_w:-80}" -ge 46 ] 2>/dev/null; then
-            local r
+        _w="${_w:-80}"
+        if [ "${_w}" -ge 66 ] 2>/dev/null; then
+            for r in 0 1 2 3 4 5; do
+                _banner_grad_row "${_art_block[$r]}" "$r"
+            done
+        elif [ "${_w}" -ge 46 ] 2>/dev/null; then
             for r in 0 1 2 3 4; do
-                _banner_grad_row "${_art[$r]}" "$r"
+                _banner_grad_row "${_art_slim[$r]}" "$r"
             done
         else
             # Ultra-narrow fallback: plain text, still themed.
             printf "${C_LIME}${C_BOLD}  MULTI MINECRAFT${C_RESET}\n"
         fi
     else
-        printf "${C_LIME}${C_BOLD}   __  ___      ____  _       __  ___     ${C_RESET}\n"
-        printf "${C_LIME}${C_BOLD}  /  |/  /_  __/ / /_(_)     /  |/  /____ ${C_RESET}\n"
-        printf "${C_LIME}${C_BOLD} / /|_/ / / / / / __/ /_____/ /|_/ / ___/ ${C_RESET}\n"
-        printf "${C_LIME}${C_BOLD}/ /  / / /_/ / / /_/ /_____/ /  / / /__   ${C_RESET}\n"
-        printf "${C_LIME}${C_BOLD}/_/  /_/\__,_/_/\__/_/     /_/  /_/\___/   ${C_RESET}\n"
+        if [ "${_w:-80}" -ge 66 ] 2>/dev/null; then
+            printf "${C_LIME}${C_BOLD}███╗   ███╗██╗   ██╗██╗      ████████╗██╗  ███╗   ███╗ ██████╗${C_RESET}\n"
+            printf "${C_LIME}${C_BOLD}████╗ ████║██║   ██║██║      ╚══██╔══╝██║  ████╗ ████║██╔════╝${C_RESET}\n"
+            printf "${C_LIME}${C_BOLD}██╔████╔██║██║   ██║██║         ██║   ██║  ██╔████╔██║██║     ${C_RESET}\n"
+            printf "${C_LIME}${C_BOLD}██║╚██╔╝██║██║   ██║██║         ██║   ██║  ██║╚██╔╝██║██║     ${C_RESET}\n"
+            printf "${C_LIME}${C_BOLD}██║ ╚═╝ ██║╚██████╔╝███████╗    ██║   ██║  ██║ ╚═╝ ██║╚██████╗${C_RESET}\n"
+            printf "${C_LIME}${C_BOLD}╚═╝     ╚═╝ ╚═════╝ ╚══════╝    ╚═╝   ╚═╝  ╚═╝     ╚═╝ ╚═════╝${C_RESET}\n"
+        else
+            printf "${C_LIME}${C_BOLD}   __  ___      ____  _       __  ___     ${C_RESET}\n"
+            printf "${C_LIME}${C_BOLD}  /  |/  /_  __/ / /_(_)     /  |/  /____ ${C_RESET}\n"
+            printf "${C_LIME}${C_BOLD} / /|_/ / / / / / __/ /_____/ /|_/ / ___/ ${C_RESET}\n"
+            printf "${C_LIME}${C_BOLD}/ /  / / /_/ / / /_/ /_____/ /  / / /__   ${C_RESET}\n"
+            printf "${C_LIME}${C_BOLD}/_/  /_/\__,_/_/\__/_/     /_/  /_/\___/   ${C_RESET}\n"
+        fi
     fi
 
     printf "${C_LIME}${C_BOLD}  » Universal Minecraft Server Runtime${C_RESET}\n"
