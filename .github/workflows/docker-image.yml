@@ -13,8 +13,23 @@ env:
   IMAGE_NAME: ${{ github.repository }} # ghcr.io/potenfyr-studios/minecraft-eggs
 
 jobs:
+  behavior-tests:
+    name: Panel Behavior Tests (docker lifecycle suite)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run panel-behavior test suite
+        shell: bash
+        run: |
+          docker build -t mc-eggs-test -f tests/Dockerfile.test . >/dev/null
+          bash tests/panel-test.sh
+
   build:
     name: Build & Publish (universal image)
+    needs: behavior-tests
     runs-on: ubuntu-latest
 
     permissions:

@@ -14,7 +14,16 @@
     "pid_limit"
   ],
   "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
-  "file_denylist": [],
+  "file_denylist": [
+    "/run.sh",
+    "/entrypoint.sh",
+    "/install.sh",
+    "/install-java.sh",
+    "/usr/local/bin/run.sh",
+    "/usr/local/bin/entrypoint.sh",
+    "/usr/local/bin/install.sh",
+    "/usr/local/bin/install-java.sh"
+  ],
   "exported_at": "2026-08-22T00:00:00+00:00",
   "scripts": {
     "installation": {
@@ -319,6 +328,36 @@
       "user_viewable": true,
       "user_editable": true,
       "rules": "required|boolean",
+      "field_type": "text"
+    },
+    {
+      "name": "Panel Stop Watcher",
+      "description": "Watch console input for the panel stop command (^C, stop, end, kill...) so Stop works on Wings/Feather-style daemons that send stop as console text (auto = enabled; 0 = disabled and pass stdin straight to the server, 1 = forced on). Non-stop console lines are forwarded to the server console, so in-game commands keep working.",
+      "env_variable": "PANEL_STOP_WATCHER",
+      "default_value": "auto",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string|in:auto,0,1",
+      "field_type": "text"
+    },
+    {
+      "name": "Banner Gradient",
+      "description": "Console banner color gradient: auto (random each boot), citrus, aurora, sunset, ocean, candy, spectrum, or none.",
+      "env_variable": "CLI_BANNER_GRADIENT",
+      "default_value": "auto",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string|in:auto,citrus,aurora,sunset,ocean,candy,spectrum,none",
+      "field_type": "text"
+    },
+    {
+      "name": "Console Theme",
+      "description": "Console theme: prog (PotenFYR agent theme, default) or classic (yolk-style [PotenFYR] prefixes and the classic banner).",
+      "env_variable": "CLI_THEME",
+      "default_value": "prog",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "nullable|string|in:prog,classic",
       "field_type": "text"
     },
     {
