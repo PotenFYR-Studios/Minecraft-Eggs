@@ -220,7 +220,9 @@ auto_install_if_needed() {
     if [ "${need_install}" = "1" ]; then
         phase "Auto-Install"
         log "Server files not found in $(pwd). Running automatic installation for ${TYPE} (${MINECRAFT_VERSION})..."
-        if [ -x /usr/local/bin/install.sh ]; then
+        if [ -x /opt/potenfyr/install.sh ]; then
+            bash /opt/potenfyr/install.sh || warn "Installer exited with code $?"
+        elif [ -x /usr/local/bin/install.sh ]; then
             bash /usr/local/bin/install.sh || warn "Installer exited with code $?"
         elif [ -f ./install.sh ]; then
             bash ./install.sh || warn "Installer exited with code $?"

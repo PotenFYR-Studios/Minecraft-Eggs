@@ -123,7 +123,7 @@ tty_out=$(timeout 280 docker run -i --rm \
     -e SERVER_PORT=25572 -e AUTO_UPDATE_EGG=0 -e SERVER_TYPE=custom \
     -e CUSTOM_COMMAND="python3 -u fake-server.py 25572" -e TTY_READY_MATCH="TEST-SERVER-UP" \
     -v "$VOL:/home/container" "$IMG" \
-    python3 /t5b-driver.py 2>&1)
+    python3 /opt/potenfyr/t5b-driver.py 2>&1)
 echo "$tty_out" | grep -aq "Stop command '\^C' received via console" \
     && ok "watcher caught '^C' text on TTY stdin" || { bad "watcher missed '^C' on tty"; echo "$tty_out" | tail -25; }
 echo "$tty_out" | grep -aq "stopped gracefully" && ok "tty text-stop ended cleanly (exit 0)" || bad "tty text-stop exit"

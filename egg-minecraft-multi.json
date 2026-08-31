@@ -18,11 +18,15 @@
     "/run.sh",
     "/entrypoint.sh",
     "/install.sh",
-    "/install-java.sh",
     "/usr/local/bin/run.sh",
     "/usr/local/bin/entrypoint.sh",
     "/usr/local/bin/install.sh",
-    "/usr/local/bin/install-java.sh"
+    "/usr/local/bin/install-java.sh",
+    "/opt/potenfyr/run.sh",
+    "/opt/potenfyr/entrypoint.sh",
+    "/opt/potenfyr/install.sh",
+    "/opt/potenfyr/install-java.sh",
+    "/opt/potenfyr/t5b-driver.py"
   ],
   "exported_at": "2026-08-22T00:00:00+00:00",
   "scripts": {
