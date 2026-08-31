@@ -674,6 +674,12 @@ print_card_row() {
     # 68-col card: panel consoles are ~70-80 cols; wider cards wrap and render
     # doubled/garbled on narrower panel consoles.
     local label="$1" value="$2" color="$3"
+    # Some coreutils/BusyBox builds print partial output to stdout AND fail
+    # (e.g. `id -un` for a uid without a passwd entry), which would smuggle a
+    # literal newline into the value and split the card row in half. Strip
+    # everything after the first line and flatten control whitespace.
+    value="${value%%[$'\r\n']*}"
+    value="${value//$'\t'/ }"
     if [ "${#value}" -gt 42 ]; then
         value="${value:0:39}..."
     fi
@@ -707,8 +713,21 @@ print_boot_card() {
     print_card_row "Server UUID" "${P_SERVER_UUID:-${SERVER_UUID:-not-provided}}" "${C_DIM}"
     print_card_row "Egg Self-Update" "$([ "${AUTO_UPDATE_EGG:-1}" = "1" ] && echo Enabled || echo Disabled)" "${C_GREEN}"
     print_card_row "Stop Watcher" "$([ "${PANEL_STOP_WATCHER:-auto}" = "0" ] && echo Disabled || echo Enabled)" "${C_CYAN}"
-    print_card_row "Process User" "$(id -un 2>/dev/null || echo '?') (uid $(id -u 2>/dev/null || echo '?'))" "${C_BLUE}"
-    print_card_row "Architecture" "$(uname -m 2>/dev/null || echo unknown) ($(uname -s 2>/dev/null || echo linux))" "${C_CYAN}"
+    local _card_user _card_uid
+    _card_user="$(id -un 2>/dev/null || true)"
+    _card_uid="$(id -u 2>/dev/null || true)"
+    # BusyBox-style `id -un` can print the numeric uid to stdout AND exit 1;
+    # take the first line only and fall back to '?' when empty.
+    _card_user="${_card_user%%[$'\r\n']*}"
+    [ -n "${_card_user}" ] || _card_user="?"
+    [ -n "${_card_uid}" ] || _card_uid="?"
+    print_card_row "Process User" "${_card_user} (uid ${_card_uid})" "${C_BLUE}"
+    local _card_arch _card_kernel
+    _card_arch="$(uname -m 2>/dev/null || true)"
+    _card_kernel="$(uname -s 2>/dev/null || true)"
+    [ -n "${_card_arch}" ] || _card_arch="unknown"
+    [ -n "${_card_kernel}" ] || _card_kernel="Linux"
+    print_card_row "Architecture" "${_card_arch} (${_card_kernel})" "${C_CYAN}"
     print_card_row "Working Dir" "${SERVER_DIR}" "${C_DIM}"
     printf " ${C_DIM}└──────────────────────────────────────────────────────────────────┘${C_RESET}\n\n"
 }
