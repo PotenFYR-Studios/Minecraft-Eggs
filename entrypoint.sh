@@ -296,12 +296,13 @@ if ! grep -qE '^PANEL_STOP_WATCHER=' "${CONF_FILE}" 2>/dev/null; then
     printf 'PANEL_STOP_WATCHER=auto\n' >> "${CONF_FILE}" 2>/dev/null || true
 fi
 
-if [ "${AUTO_UPDATE_EGG}" = "1" ] && [ -n "${EGG_UPDATE_URL}" ] && [ -f /usr/local/bin/run.sh ] && command -v curl >/dev/null 2>&1; then
+if [ "${AUTO_UPDATE_EGG}" = "1" ] && [ -n "${EGG_UPDATE_URL}" ] && [ -f /opt/potenfyr/run.sh ] && command -v curl >/dev/null 2>&1; then
     if echo "${EGG_UPDATE_URL}" | grep -q '^https://'; then
-        # Non-root panels (uid 988 etc.) cannot write /usr/local/bin; fall back to
-        # a user-writable override location that launcher resolution below prefers
-        # over the image copy.
-        _egg_target="/usr/local/bin/run.sh"
+        # Canonical egg scripts live root-owned in /opt/potenfyr; only root
+        # can write there. Non-root panels (uid 988 etc.) fall back to a
+        # user-writable override location that launcher resolution below
+        # prefers over the image copy - after hash verification.
+        _egg_target="/opt/potenfyr/run.sh"
         _egg_hashfile="/etc/potenfyr-egg-hash"
         _egg_lhash="/etc/potenfyr-launcher-hash"
         if ! [ -w "$(dirname "${_egg_target}")" ] || [ "$(id -u 2>/dev/null || echo 1)" != "0" ]; then
@@ -727,8 +728,8 @@ unset _staged_hash
 # mismatching hash) are never executed: a user-writable file is not trusted
 # just because it contains a branding string.
 case "${PARSED}" in
-    "bash run.sh" | "run.sh" | "./run.sh" | "bash ./run.sh" | "/run.sh" | "bash /run.sh" | "")
-        LAUNCHER_SCRIPT="/usr/local/bin/run.sh"
+    "bash run.sh" | "run.sh" | "./run.sh" | "bash ./run.sh" | "/run.sh" | "bash /run.sh" | "/usr/local/bin/run.sh" | "bash /usr/local/bin/run.sh" | "/opt/potenfyr/run.sh" | "bash /opt/potenfyr/run.sh" | "")
+        LAUNCHER_SCRIPT="/opt/potenfyr/run.sh"
         if [ -f "${_POT_DIR}/run.sh" ]; then
             _rec_hash="$(cat "${_POT_DIR}/launcher-hash" 2>/dev/null || true)"
             if [ -n "${_rec_hash}" ] && [ "$(sha256sum "${_POT_DIR}/run.sh" 2>/dev/null | cut -d' ' -f1)" = "${_rec_hash}" ]; then
@@ -746,7 +747,9 @@ esac
 # If the command directly calls java and server files are missing, run installer first
 if echo "${PARSED}" | grep -q "java " && [ ! -f "${SERVER_JARFILE:-server.jar}" ] && [ ! -f unix_args.txt ]; then
     log "Server files not found. Running automatic installation before starting..."
-    if [ -x /usr/local/bin/install.sh ]; then
+    if [ -x /opt/potenfyr/install.sh ]; then
+        bash /opt/potenfyr/install.sh || warn "Automatic install exited with code $?"
+    elif [ -x /usr/local/bin/install.sh ]; then
         bash /usr/local/bin/install.sh || warn "Automatic install exited with code $?"
     elif [ -x /install.sh ]; then
         bash /install.sh || warn "Automatic install exited with code $?"

@@ -95,13 +95,23 @@ RUN useradd -d /home/container -m -s /bin/bash container \
     && chown -R container:container /home/container \
     && chmod -R 777 /home/container
 
-COPY install.sh /install.sh
-COPY install.sh /usr/local/bin/install.sh
-COPY entrypoint.sh /entrypoint.sh
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY run.sh /run.sh
-COPY run.sh /usr/local/bin/run.sh
-RUN chmod +x /entrypoint.sh /usr/local/bin/entrypoint.sh /run.sh /usr/local/bin/run.sh /install.sh /usr/local/bin/install.sh /usr/local/bin/install-java.sh
+# Egg runtime scripts live in a dedicated root-owned directory outside the
+# user-visible server directory. The panel file manager is jailed to
+# /home/container, so users can never see, edit or replace them; everything
+# is root:root 0755 (world-readable + executable, never writable by the
+# container user). /usr/local/bin, /entrypoint.sh, /run.sh and /install.sh
+# are symlinks kept for panel startup-string compatibility.
+COPY install.sh entrypoint.sh run.sh install-java.sh /opt/potenfyr/
+RUN chmod 755 /opt/potenfyr \
+    && chown root:root /opt/potenfyr/* \
+    && chmod 755 /opt/potenfyr/run.sh /opt/potenfyr/entrypoint.sh /opt/potenfyr/install.sh /opt/potenfyr/install-java.sh \
+    && ln -sf /opt/potenfyr/entrypoint.sh /entrypoint.sh \
+    && ln -sf /opt/potenfyr/entrypoint.sh /usr/local/bin/entrypoint.sh \
+    && ln -sf /opt/potenfyr/run.sh /run.sh \
+    && ln -sf /opt/potenfyr/run.sh /usr/local/bin/run.sh \
+    && ln -sf /opt/potenfyr/install.sh /install.sh \
+    && ln -sf /opt/potenfyr/install.sh /usr/local/bin/install.sh \
+    && ln -sf /opt/potenfyr/install-java.sh /usr/local/bin/install-java.sh
 
 # Provenance stamp surfaced at boot for supportability & audit trails.
 #  Stop contract: the launcher (PID 1) traps SIGTERM/SIGINT for graceful

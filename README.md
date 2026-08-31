@@ -602,6 +602,14 @@ pull newer egg revisions automatically.
   own isolated filesystem namespace.
 - The root filesystem is read-only at runtime (wings default); servers write
   only into their mounted directory.
+- Egg scripts (`run.sh`, `entrypoint.sh`, `install.sh`, `install-java.sh`)
+  live root-owned in `/opt/potenfyr/`, outside the panel file manager's jail
+  (`/home/container`): users can read and execute them but can never modify,
+  replace or upload over them. `/usr/local/bin/*` and `/entrypoint.sh` are
+  root-owned compatibility symlinks. The panel-side `file_denylist` blocks
+  these paths as well, and the non-root self-update override
+  (`.potenfyr/run.sh`) is executed only after a sha256 match against the hash
+  recorded by the update engine.
 - All shell scripts run with `set -uo pipefail` and fully quoted expansions.
 - `.multi-mc.conf` and `.mc-instance.conf` are parsed, never sourced: values
   cannot execute code.
