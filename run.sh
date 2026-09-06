@@ -449,6 +449,30 @@ trap 'handle_signal HUP' HUP
 trap 'handle_signal QUIT' QUIT
 trap - EXIT
 
+# --- Console mirror drain ------------------------------------------------------
+# The entrypoint mirrors the whole console through a `tee` child process
+# (exec > >(tee -a .logs/console.log)). tee exits only when our stdout closes,
+# i.e. when this launcher exits - and when PID 1 exits the kernel SIGKILLs the
+# whole PID namespace immediately, so a launcher that prints a large block and
+# exits right away (crash report, stop confirmation) can get the tail of its
+# output cut off from docker/panel logs. The EXIT trap below gives the mirror
+# a brief drain window while the container is still alive. No-op when the
+# mirror is disabled (LAUNCHER_LOG=0) or no tee child exists.
+mirror_drain() {
+    local d ppid name
+    for d in /proc/[0-9]*; do
+        [ -r "${d}/status" ] || continue
+        ppid=$(awk '/^PPid:/{print $2}' "${d}/status" 2>/dev/null)
+        [ "${ppid}" = "$$" ] || continue
+        name=$(awk '/^Name:/{print $2}' "${d}/status" 2>/dev/null)
+        [ "${name}" = "tee" ] || continue
+        sleep "${CONSOLE_DRAIN_SECONDS:-0.5}"
+        return 0
+    done
+    return 0
+}
+trap 'mirror_drain' EXIT
+
 # --- Panel Stop Command Watcher (stdin) ---------------------------------------
 # Wings-family daemons (Feather Panel, Pterodactyl, Pelican, Jexactyl, Wisp)
 # create server containers with Tty:true and deliver the configured stop
