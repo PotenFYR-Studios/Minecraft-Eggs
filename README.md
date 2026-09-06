@@ -191,9 +191,10 @@ panel; `ADMIN` = hidden (set only by administrators).
 | `MINECRAFT_VERSION` | `latest` | USER | Exact version or keyword: `latest`, `stable`, `release`, `ga`, `latest-snapshot`, `snapshot`, `alpha`, `beta`, `experimental`, `nightly`, `preview`, `dev` |
 | `BUILD_NUMBER` | `latest` | USER | Pin a build for Paper/Folia/Purpur/Velocity/Waterfall/Mohist |
 | `LOADER_VERSION` | `latest` | USER | Mod loader version for Forge/NeoForge/Fabric/Quilt |
-| `GITHUB_REPO` | *(empty)* | USER | `owner/repo` when type is `github` |
+| `GITHUB_REPO` | *(empty)* | USER | `owner/repo` (or a full GitHub URL) when type is `github` |
 | `GITHUB_TAG` | `latest` | USER | Release tag for GitHub installs |
 | `GITHUB_ASSET` | *(empty)* | USER | Asset substring filter (empty = auto pick a jar) |
+| `GITHUB_TOKEN` | *(empty)* | USER | Optional GitHub token for private repos / API rate limits |
 | `SERVER_JARFILE` | `server.jar` | USER | Jar filename (auto-handled for Forge/NeoForge 1.17+) |
 | `CUSTOM_COMMAND` | `java -Xmx1024M -jar server.jar` | USER | Full command when type is `custom` |
 
@@ -308,10 +309,20 @@ SERVER_TYPE       pocketmine     # or nukkit
 ### Any GitHub-published server (Arclight, Feather, forks, ...)
 ```
 SERVER_TYPE       github
-GITHUB_REPO       IzzelAliz/Arclight
+GITHUB_REPO       IzzelAliz/Arclight   # owner/repo or a full GitHub URL
 GITHUB_TAG        latest
 GITHUB_ASSET      server
 ```
+`GITHUB_TOKEN` (optional) authenticates private repositories and avoids the
+anonymous API rate limit (403). Release assets (.jar/.zip) are preferred;
+a repo without releases is cloned as a source archive of its newest commit.
+
+Updates are validated automatically: the installed release/commit is recorded
+in `.mc-instance.conf`, and on Reinstall the installer compares it against the
+repository. When new commits or a new release exist, the current codebase is
+archived to `archive/` and the update is fetched; if nothing changed, the
+reinstall is a no-op. Downloads are atomic - a failed download never deletes
+the previously working jar, so a reinstall can never wipe your files.
 
 ### Crossplay in one line (Geyser + Floodgate + ViaVersion)
 ```
@@ -490,7 +501,8 @@ entrypoint.sh
 run.sh
       5. validates settings, auto-fills sane defaults
       6. auto-installs if server files are missing (self-healing)
-      7. prints the boot card (type, version, Java, memory, host, ...)
+      7. prints the boot card (type, version, Java, entry point, memory
+         tuning, disk free, port, panel, UUID, reinstall mode, ...)
       8. dispatches:
             bedrock     -> ./bedrock_server
             pocketmine  -> php PocketMine-MP.phar --no-wizard

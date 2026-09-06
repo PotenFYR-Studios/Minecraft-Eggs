@@ -10,9 +10,15 @@
 #    quilt | mohist | magma | bungeecord | velocity | waterfall | bedrock |
 #    nukkit | pocketmine | github | custom
 #
-#  'github' installs a server jar straight from a GitHub release
-#  (GITHUB_REPO=owner/name, optional GITHUB_TAG and GITHUB_ASSET filter) -
-#  perfect for software that is only published on GitHub.
+#  'github' installs from a GitHub repository (GITHUB_REPO=owner/name, a full
+#  GitHub URL also works; optional GITHUB_TAG and GITHUB_ASSET filter).
+#  GITHUB_TOKEN (optional) enables private repositories and avoids API rate
+#  limits. Release assets (.jar/.zip) are preferred; repos without releases
+#  are fetched as a source archive of the newest commit. The installed
+#  release/commit is recorded in .mc-instance.conf, so a later Reinstall
+#  detects new commits/releases, archives the current codebase into archive/
+#  and fetches the updated one (nothing is wiped; failed downloads never
+#  destroy the previously working jar).
 #
 #  Every project supports its full version history; unknown versions fall
 #  back to the latest release with a warning. Setting DL_URL bypasses the
@@ -94,7 +100,8 @@ fail() {
                 echo -e "  • Allocate sufficient memory (at least 2048 MB is recommended for Forge installer)."
                 ;;
             github)
-                echo -e "  • Verify that '${GITHUB_REPO}' is public and has releases."
+                echo -e "  • Verify that '${GITHUB_REPO}' exists and has releases (or source code)."
+                echo -e "  • Set GITHUB_TOKEN for private repositories, or when the API rate-limits you (403)."
                 echo -e "  • Check if GITHUB_ASSET matches the release asset filename."
                 ;;
             custom)
@@ -145,12 +152,54 @@ KEEP_BACKUP="${KEEP_BACKUP:-0}"
 GITHUB_REPO="${GITHUB_REPO:-}"
 GITHUB_TAG="${GITHUB_TAG:-latest}"
 GITHUB_ASSET="${GITHUB_ASSET:-}"
+GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 SHOW_VERSIONS="${SHOW_VERSIONS:-0}"
 EXTRA_URLS="${EXTRA_URLS:-}"
 WORLD_URL="${WORLD_URL:-}"
 RESOLVED_VERSION=""
 
 USER_AGENT="MultiMinecraftEgg/1.0 (PotenFYR Studios; https://github.com/PotenFYR-Studios/Minecraft-Eggs)"
+
+# GitHub API/download helper. GITHUB_TOKEN (optional) authenticates private
+# repositories and lifts the 60 req/hour anonymous rate limit - without it,
+# busy nodes get 403s that look like "github fetch doesn't work".
+gh_auth_header() {
+    [ -n "${GITHUB_TOKEN}" ] && printf 'Authorization: Bearer %s' "${GITHUB_TOKEN}"
+}
+
+gh_download() { # $1 = url, $2 = destination file (omit to print to stdout)
+    local auth
+    auth=$(gh_auth_header)
+    if [ "$#" -ge 2 ]; then
+        if [ -n "${auth}" ]; then
+            curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" -H "${auth}" -o "$2" "$1"
+        else
+            curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" -o "$2" "$1"
+        fi
+    else
+        if [ -n "${auth}" ]; then
+            curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" -H "${auth}" "$1"
+        else
+            curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" "$1"
+        fi
+    fi
+}
+
+gh_api() { # $1 = API path (after https://api.github.com) -> JSON on stdout
+    gh_download "https://api.github.com${1}"
+}
+
+# Accepts owner/repo, https://github.com/owner/repo, git@github.com:owner/repo
+# and optional .git / trailing-slash suffixes; prints a clean owner/repo.
+normalize_github_repo() {
+    local r="${1:-}"
+    r="$(printf '%s' "${r}" | tr -d '[:space:]')"
+    r="${r##*github.com[:/]}"   # strip any URL / scp-style prefix
+    r="${r%/}"                  # trailing slash
+    r="${r%.git}"               # .git suffix
+    r="${r%/}"
+    printf '%s' "${r}"
+}
 
 # Backup (or remove) an existing server jar before replacing it.
 backup_existing_jar() {
@@ -165,13 +214,19 @@ backup_existing_jar() {
 }
 
 download() { # $1 = url, $2 = destination (atomic + cleaned up on failure)
-    if [ "$2" = "${JARFILE}" ]; then
-        backup_existing_jar
-    fi
-    if ! curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" -o "$2" "$1"; then
-        rm -f "$2"
+    # The replacement is downloaded to a temp file FIRST; the previous jar is
+    # only removed after the new one is fully on disk. Deleting the jar up
+    # front turned every failed download (bad URL, GitHub rate limit, offline
+    # node) into a "reinstall wiped my server" report.
+    local dest="$2" tmp="${2}.download.$$"
+    if ! curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" -o "${tmp}" "$1"; then
+        rm -f "${tmp}"
         fail "Failed to download $1"
     fi
+    if [ "${dest}" = "${JARFILE}" ]; then
+        backup_existing_jar
+    fi
+    mv -f "${tmp}" "${dest}"
 }
 
 # ---------------------------------------------------------------------------
@@ -220,7 +275,7 @@ archive_previous_instance() {
     for f in "${SERVER_DIR}"/*; do
         base=$(basename "${f}")
         case "${base}" in
-            archive|.mc-instance.conf|.multi-mc.conf|.gitkeep) continue ;;
+            archive|.mc-instance.conf|.multi-mc.conf|.gitkeep|.potenfyr|.logs|install-error.log|install-error.log.old) continue ;;
         esac
         if mv -f -- "${f}" "${dest}/" 2>/dev/null; then
             count=$((count + 1))
@@ -876,45 +931,135 @@ install_pocketmine() {
     ok "PocketMine-MP install complete"
 }
 
-install_github() {
-    local data url asset_file
-    log "Installing from GitHub (${GITHUB_REPO}${GITHUB_TAG:+ @ ${GITHUB_TAG}})"
-    [ -n "${GITHUB_REPO}" ] || fail "GITHUB_REPO must be set for the 'github' server type (format: owner/repository)"
+install_github() { # $1 = "check" to only report the upstream state (used by SHOW_VERSIONS-free update probe)
+    local data tag asset_url asset_name ref_id prev_repo prev_ref
+    GITHUB_REPO="$(normalize_github_repo "${GITHUB_REPO}")"
+    [ -n "${GITHUB_REPO}" ] || fail "GITHUB_REPO must be set for the 'github' server type (format: owner/repository or a full GitHub URL)"
     echo "${GITHUB_REPO}" | grep -qE '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' \
-        || fail "GITHUB_REPO '${GITHUB_REPO}' is not a valid owner/repository"
+        || fail "GITHUB_REPO '${GITHUB_REPO}' is not a valid owner/repository (full GitHub URLs and .git suffixes are accepted)"
+
+    # What did this server install last time?
+    prev_repo=$(instance_get github_repo)
+    prev_ref=$(instance_get github_ref)
+
+    # --- resolve the upstream reference ---------------------------------------
+    # 1. A release (tagged or latest) with assets -> download the asset.
+    # 2. A tagged commit without a release -> source tarball at that tag.
+    # 3. A repo with no releases at all -> source tarball of the default
+    #    branch's latest commit ("clone" behaviour for plain code repos).
+    data=""
     if [ "${GITHUB_TAG}" = "latest" ]; then
-        data=$(curl -fsSL -A "${USER_AGENT}" "https://api.github.com/repos/${GITHUB_REPO}/releases/latest") \
-            || fail "Cannot reach the GitHub API for ${GITHUB_REPO}"
+        data=$(gh_api "/repos/${GITHUB_REPO}/releases/latest" 2>/dev/null || true)
     else
-        data=$(curl -fsSL -A "${USER_AGENT}" "https://api.github.com/repos/${GITHUB_REPO}/releases/tags/${GITHUB_TAG}") \
-            || fail "No release with tag '${GITHUB_TAG}' found for ${GITHUB_REPO}"
+        data=$(gh_api "/repos/${GITHUB_REPO}/releases/tags/${GITHUB_TAG}" 2>/dev/null || true)
     fi
-    if [ -n "${GITHUB_ASSET}" ]; then
-        url=$(echo "${data}" | jq -r --arg a "${GITHUB_ASSET}" '.assets[]?.browser_download_url | select(contains($a))' | head -n1)
+    tag=$(echo "${data}" | jq -r '.tag_name // empty' 2>/dev/null)
+    asset_url=""
+    if [ -n "${tag}" ]; then
+        if [ -n "${GITHUB_ASSET}" ]; then
+            asset_url=$(echo "${data}" | jq -r --arg a "${GITHUB_ASSET}" '.assets[]?.browser_download_url | select(contains($a))' | head -n1)
+        else
+            asset_url=$(echo "${data}" | jq -r '.assets[]?.browser_download_url | select(test("\\.jar$"; "i"))' | head -n1)
+            [ -z "${asset_url}" ] && asset_url=$(echo "${data}" | jq -r '.assets[0].browser_download_url // empty')
+        fi
+    fi
+
+    if [ -n "${asset_url}" ] && [ "${asset_url}" != "null" ]; then
+        asset_name="${asset_url##*/}"
+        ref_id="release:${tag}:${asset_name}"
     else
-        url=$(echo "${data}" | jq -r '.assets[]?.browser_download_url | select(test("\\.jar$"; "i"))' | head -n1)
-        [ -z "${url}" ] && url=$(echo "${data}" | jq -r '.assets[0].browser_download_url // empty')
+        # No release/asset: fall back to the repository source archive.
+        local branch="${GITHUB_TAG}" sha
+        if [ "${branch}" = "latest" ]; then
+            branch=$(gh_api "/repos/${GITHUB_REPO}" 2>/dev/null | jq -r '.default_branch // empty' 2>/dev/null)
+            [ -z "${branch}" ] \
+                && fail "Cannot reach the GitHub API for ${GITHUB_REPO} (check the repository name; set GITHUB_TOKEN for private repositories or when rate-limited)"
+        fi
+        sha=$(gh_api "/repos/${GITHUB_REPO}/commits/${branch}" 2>/dev/null | jq -r '.sha // empty' 2>/dev/null)
+        [ -z "${sha}" ] \
+            && fail "Cannot resolve '${branch}' in ${GITHUB_REPO} (invalid tag/branch, or GITHUB_TOKEN is missing/insufficient for a private repository)"
+        ref_id="commit:${sha}"
+        asset_url=""
+        tag="${branch}"
     fi
-    [ -z "${url}" ] || [ "${url}" = "null" ] && fail "No matching release asset found for ${GITHUB_REPO}"
-    log "Downloading ${url##*/}"
-    RESOLVED_VERSION="${GITHUB_TAG} (${url##*/})"
-    asset_file="${url##*/}"
-    case "${asset_file}" in
-        *.zip)
-            curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" -o asset.zip "${url}" || fail "Failed to download ${url}"
-            unzip -o asset.zip > /dev/null
-            rm -f asset.zip
-            local jar
-            jar=$(ls *.jar 2>/dev/null | grep -v "${JARFILE}" | head -n1)
-            [ -z "${jar}" ] && fail "No .jar file found inside the release asset"
-            backup_existing_jar
-            mv "${jar}" "${JARFILE}"
-            ;;
-        *)
-            download "${url}" "${JARFILE}"
-            ;;
+
+    # --- update validation: is the installed code still the latest? -----------
+    # Release installs require the jar to still be present; source installs
+    # count any leftover server content. A missing artifact forces a re-fetch.
+    local installed_present=0
+    case "${prev_ref}" in
+        commit:*) [ -n "$(ls -A "${SERVER_DIR}" 2>/dev/null)" ] && installed_present=1 ;;
+        release:*) [ -f "${SERVER_DIR}/${JARFILE}" ] && installed_present=1 ;;
     esac
-    ok "GitHub install complete"
+    if [ -n "${prev_ref}" ] && [ "${prev_repo}" = "${GITHUB_REPO}" ] && [ "${prev_ref}" = "${ref_id}" ] \
+        && [ "${installed_present}" = "1" ]; then
+        ok "GitHub ${GITHUB_REPO} is already at ${ref_id} - no new commits/releases, nothing to do"
+        RESOLVED_VERSION="${ref_id}"
+        return 0
+    fi
+    if [ -n "${prev_ref}" ] && [ "${prev_repo}" = "${GITHUB_REPO}" ]; then
+        warn "GitHub update detected: ${prev_ref} -> ${ref_id}"
+        ARCHIVE_REASON="github source updated (${prev_ref} -> ${ref_id})"
+        archive_previous_instance
+    elif [ -n "${prev_ref}" ] && [ -n "${prev_repo}" ] && [ "${prev_repo}" != "${GITHUB_REPO}" ]; then
+        warn "GitHub repository changed: ${prev_repo} -> ${GITHUB_REPO}"
+        ARCHIVE_REASON="github repository changed (${prev_repo} -> ${GITHUB_REPO})"
+        archive_previous_instance
+    fi
+
+    # --- fetch ----------------------------------------------------------------
+    if [ -n "${asset_url}" ]; then
+        log "Downloading ${asset_name} (${GITHUB_REPO} @ ${tag})"
+        RESOLVED_VERSION="${tag} (${asset_name})"
+        case "${asset_name}" in
+            *.zip)
+                local tmpzip jar
+                tmpzip="${SERVER_DIR}/.gh-asset.zip"
+                gh_download "${asset_url}" "${tmpzip}" || { rm -f "${tmpzip}"; fail "Failed to download ${asset_url}"; }
+                unzip -o "${tmpzip}" > /dev/null 2>&1 || { rm -f "${tmpzip}"; fail "Release asset ${asset_name} could not be extracted (is it a valid zip?)"; }
+                rm -f "${tmpzip}"
+                jar=$(ls *.jar 2>/dev/null | grep -v "${JARFILE}" | head -n1)
+                [ -z "${jar}" ] && fail "No .jar file found inside the release asset"
+                backup_existing_jar
+                mv -f "${jar}" "${JARFILE}"
+                ;;
+            *)
+                gh_download "${asset_url}" "${JARFILE}.download.$$" || { rm -f "${JARFILE}.download.$$"; fail "Failed to download ${asset_url}"; }
+                backup_existing_jar
+                mv -f "${JARFILE}.download.$$" "${JARFILE}" \
+                    || { rm -f "${JARFILE}.download.$$"; fail "Could not place the downloaded jar at ${JARFILE}"; }
+                ;;
+        esac
+    else
+        local tmpsrc root jar
+        log "Fetching repository source (${GITHUB_REPO} @ ${sha})"
+        RESOLVED_VERSION="commit ${sha:0:7}"
+        tmpsrc="${SERVER_DIR}/.gh-src"
+        rm -rf "${tmpsrc}"
+        mkdir -p "${tmpsrc}"
+        gh_download "https://api.github.com/repos/${GITHUB_REPO}/tarball/${sha}" "${tmpsrc}/src.tar.gz" \
+            || { rm -rf "${tmpsrc}"; fail "Failed to download the source archive of ${GITHUB_REPO}"; }
+        tar -xzf "${tmpsrc}/src.tar.gz" -C "${tmpsrc}" 2>/dev/null \
+            || { rm -rf "${tmpsrc}"; fail "Repository source archive could not be extracted"; }
+        rm -f "${tmpsrc}/src.tar.gz"
+        root=$(find "${tmpsrc}" -mindepth 1 -maxdepth 1 -type d | head -n1)
+        [ -n "${root}" ] || { rm -rf "${tmpsrc}"; fail "Repository source archive is empty"; }
+        # Overlay the repo contents into the server directory (non-destructive:
+        # anything already present that the archive pass did not move stays).
+        (shopt -s dotglob nullglob; cp -a "${root}/"* "${SERVER_DIR}/" 2>/dev/null || true)
+        rm -rf "${tmpsrc}"
+        jar=$(find "${SERVER_DIR}" -maxdepth 3 -name '*.jar' -not -path "${SERVER_DIR}/archive/*" -not -path "${SERVER_DIR}/.logs/*" -not -name '*-sources*' 2>/dev/null | head -n1)
+        if [ -n "${jar}" ] && [ ! -f "${JARFILE}" ]; then
+            cp -f "${jar}" "${JARFILE}" 2>/dev/null || true
+            log "Using ${jar##*/} as ${JARFILE}"
+        fi
+        log "Repository source installed into ${SERVER_DIR}"
+    fi
+
+    # Record what is installed so the next Reinstall can detect new commits.
+    instance_set_kv github_repo "${GITHUB_REPO}"
+    instance_set_kv github_ref "${ref_id}"
+    ok "GitHub install complete (${GITHUB_REPO} @ ${ref_id})"
 }
 
 # ---------------------------------------------------------------------------

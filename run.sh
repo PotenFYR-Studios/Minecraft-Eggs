@@ -692,26 +692,53 @@ print_boot_card() {
         java_disp="$(java -version 2>&1 | head -n1 | sed 's/^openjdk version /OpenJDK /; s/^openjdk /Java /' | tr -d '"')"
         [ -n "${JAVA_HOME:-}" ] && java_disp="${java_disp} (${JAVA_HOME})"
     fi
-    local mem_line="${SERVER_MEMORY:-1024} MB"
+    # Memory tuning: Xmx the panel allocated, plus the cgroup hard limit when
+    # the kernel exposes one, plus the classic 85%-safe-heap guidance.
+    local mem_mb="${SERVER_MEMORY:-1024}" mem_line
+    case "${mem_mb}" in *[!0-9]* | "") mem_mb=1024 ;; esac
+    mem_line="${mem_mb}MB Xmx (safe heap $((mem_mb * 85 / 100))MB)"
     if [ -f /sys/fs/cgroup/memory.max ]; then
         local _cgmax
         _cgmax=$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo max)
         if [ "${_cgmax}" != "max" ] && [ -n "${_cgmax}" ] && [ "${_cgmax}" -gt 0 ] 2>/dev/null; then
-            mem_line="${mem_line} (cgroup $((_cgmax / 1024 / 1024)) MB)"
+            mem_line="${mem_mb}MB Xmx (cgroup limit $((_cgmax / 1024 / 1024))MB)"
         fi
     fi
+    # Entry point: what will actually be executed after this card.
+    local entry_point
+    case "${TYPE}" in
+        bedrock)    entry_point="./bedrock_server" ;;
+        pocketmine) entry_point="php ./PocketMine-MP.phar" ;;
+        custom)     entry_point="${CUSTOM_COMMAND:-java -Xmx${mem_mb}M -jar ${SERVER_JARFILE:-server.jar}}" ;;
+        *)
+            if [ -f unix_args.txt ] && { [ "${TYPE}" = "forge" ] || [ "${TYPE}" = "neoforge" ]; }; then
+                entry_point="java @unix_args.txt nogui"
+            else
+                entry_point="java -jar ${SERVER_JARFILE:-server.jar}"
+            fi
+            ;;
+    esac
+    local disk_free
+    disk_free="$(df -h . 2>/dev/null | awk 'NR==2 {print $4}')"
+    [ -n "${disk_free}" ] || disk_free="unknown"
 
     printf " ${C_DIM}┌──────────────────────────────────────────────────────────────────┐${C_RESET}\n"
     print_card_row "Server Type" "${TYPE}" "${C_GREEN}"
     print_card_row "MC Version" "${MINECRAFT_VERSION:-latest}$([ "${BUILD_NUMBER:-latest}" != "latest" ] && echo " build ${BUILD_NUMBER}")" "${C_GREEN}"
     print_card_row "Java Runtime" "${java_disp}" "${C_GREEN}"
+    print_card_row "Entry Point" "${entry_point}" "${C_YELLOW}"
     print_card_row "Target Jarfile" "${SERVER_JARFILE:-n/a (proxy/bedrock/php)}" "${C_YELLOW}"
     print_card_row "GC Tuning" "${FLAGS_SOURCE:-JAVA_FLAGS}" "${C_CYAN}"
-    print_card_row "Memory" "${mem_line}" "${C_MAGENTA}"
+    print_card_row "Memory Tuning" "${mem_line}" "${C_MAGENTA}"
+    print_card_row "Disk Free" "${disk_free} available" "${C_MAGENTA}"
     print_card_row "Port Allocation" "${SERVER_PORT:-25565} (${SERVER_IP:-0.0.0.0})" "${C_GREEN}"
+    if [ "${TYPE}" = "github" ]; then
+        print_card_row "GitHub Source" "${GITHUB_REPO:-not-set} @ ${GITHUB_TAG:-latest}" "${C_MAGENTA}"
+    fi
     print_card_row "Host Platform" "${PANEL_TYPE:-Docker / Standalone}" "${C_BLUE}"
     print_card_row "Server UUID" "${P_SERVER_UUID:-${SERVER_UUID:-not-provided}}" "${C_DIM}"
     print_card_row "Egg Self-Update" "$([ "${AUTO_UPDATE_EGG:-1}" = "1" ] && echo Enabled || echo Disabled)" "${C_GREEN}"
+    print_card_row "Reinstall Mode" "$([ "${AUTO_UPDATE:-1}" = "1" ] && echo "Always update on reinstall" || echo "Keep files on reinstall")" "${C_GREEN}"
     print_card_row "Stop Watcher" "$([ "${PANEL_STOP_WATCHER:-auto}" = "0" ] && echo Disabled || echo Enabled)" "${C_CYAN}"
     local _card_user _card_uid
     _card_user="$(id -un 2>/dev/null || true)"
