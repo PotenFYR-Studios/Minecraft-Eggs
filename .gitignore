@@ -36,3 +36,9 @@ jdk/
 # OS / editor junk
 .DS_Store
 Thumbs.db
+
+# --- PotenFYR Studios: baseline hygiene ---
+.env
+.env.*
+!.env.example
+.idea/

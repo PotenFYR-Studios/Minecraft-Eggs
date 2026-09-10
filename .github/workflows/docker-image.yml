@@ -12,6 +12,9 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }} # ghcr.io/potenfyr-studios/minecraft-eggs
 
+permissions:
+  contents: write
+
 jobs:
   behavior-tests:
     name: Panel Behavior Tests (docker lifecycle suite)
