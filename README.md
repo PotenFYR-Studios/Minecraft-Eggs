@@ -17,7 +17,7 @@
 [![Server Engines](https://img.shields.io/badge/Server%20Engines-19%2B%20Supported-orange?style=flat-square&logo=curseforge)](https://github.com/PotenFYR-Studios/Minecraft-Eggs#-supported-server-software--engine-matrix)
 [![Java Versions](https://img.shields.io/badge/Java%20Runtimes-8%20%7C%2011%20%7C%2017%20%7C%2021%20%7C%2025%2B-red?style=flat-square&logo=openjdk)](https://github.com/PotenFYR-Studios/Minecraft-Eggs#-java-runtime-guide--on-demand-engine)
 [![Docker Image](https://img.shields.io/badge/Docker%20Image-GHCR-blue?style=flat-square&logo=docker)](https://github.com/PotenFYR-Studios/Minecraft-Eggs/pkgs/container/minecraft-eggs)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
+[![License: Apache-2.0 + Commons Clause](https://img.shields.io/badge/License-Apache--2.0%20%2B%20Commons%20Clause-blue.svg?style=flat-square)](LICENSE)
 [![Architectures](https://img.shields.io/badge/Architectures-amd64%20%7C%20arm64%20%7C%20ppc64le%20%7C%20s390x%20%7C%20riscv64-darkgreen?style=flat-square)](https://github.com/PotenFYR-Studios/Minecraft-Eggs#-architecture--os-platform-support)
 [![Panels](https://img.shields.io/badge/Panels-Pterodactyl%20%7C%20Pelican%20%7C%20Feather%20%7C%20Wisp%20%7C%20Docker-9cf?style=flat-square)](https://github.com/PotenFYR-Studios/Minecraft-Eggs#-panel-compatibility--detection)
 
@@ -642,7 +642,7 @@ We welcome contributions, bug reports, and server software suggestions!
 
 ## 📜 License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the **Apache License 2.0 with the Commons Clause** - see the [LICENSE](LICENSE) file for details. Free to fork, modify, use, and build products or services around it - but the software itself may not be sold as a paid product.
 
 <div align="center">
 
