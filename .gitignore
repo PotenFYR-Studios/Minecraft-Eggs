@@ -42,3 +42,8 @@ Thumbs.db
 .env.*
 !.env.example
 .idea/
+
+# Local agent/assistant artifacts (do not commit)
+CLAUDE.md
+.rtk
+.plan
