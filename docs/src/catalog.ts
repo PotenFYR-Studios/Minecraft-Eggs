@@ -1,6 +1,32 @@
 /** Typed access to the build-time catalog generated from egg-minecraft-multi.json. */
 import raw from "./generated/catalog.json";
 
+/**
+ * Base path the site is served under. Set at build time via VITE_BASE
+ * (vite.config `base`); falls back through the runtime env so the
+ * prerender script executed outside vite still resolves it.
+ */
+const envBase: unknown = import.meta.env?.BASE_URL;
+export const BASE: string =
+  typeof envBase === "string" ? envBase
+  : typeof process !== "undefined" ? process.env?.VITE_BASE ?? "/"
+  : "/";
+
+/** Prefix an absolute site path with the serving base (idempotent). */
+export function withBase(p: string): string {
+  if (BASE !== "/" && (p === BASE || p.startsWith(BASE))) return p;
+  if (!p.startsWith("/")) return p;
+  return `${BASE}${p.slice(1)}`;
+}
+
+/** Remove the serving base from a URL path (idempotent). */
+export function stripBase(pathname: string): string {
+  if (BASE === "/") return pathname;
+  if (pathname === BASE) return "/";
+  if (pathname.startsWith(BASE)) return pathname.slice(BASE.length - 1);
+  return pathname;
+}
+
 export interface EggVariable {
   env: string;
   name: string;
@@ -56,7 +82,7 @@ export type PageId = (typeof CANONICAL_PAGES)[number]["id"];
 export function pageFromPath(pathname: string): PageId {
   // Accept the /docs/eggs.html twin form (same page as /docs/eggs/), then
   // drop trailing slashes so directory and extension URLs route identically.
-  const p = (pathname.replace(/\/+$/, "") || "/").replace(/\.html$/, "");
+  const p = (stripBase(pathname).replace(/\/+$/, "") || "/").replace(/\.html$/, "");
   if (p === "/docs") return "docs";
   if (p === "/docs/eggs") return "eggs";
   if (p === "/docs/server-types") return "server-types";

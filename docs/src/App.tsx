@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Menu, Search, X } from "lucide-react";
 import {
   CANONICAL_PAGES, DISCORD_URL, NEST_URL, ORG_URL, REPO_URL, pageFromPath, SITE_URL,
+  withBase,
   type PageId,
 } from "./catalog";
 import Home from "./pages/Home";
@@ -48,8 +49,8 @@ export default function App() {
     <div className="flex min-h-screen flex-col">
       <ScrollProgress />
       <header className="site-header">
-        <a href="/" className="flex items-center gap-2.5 no-underline" aria-label="Minecraft Eggs home">
-          <img src="/favicon.png" alt="" width={24} height={24} className="brand-mark rounded-md" />
+        <a href={withBase("/")} className="flex items-center gap-2.5 no-underline" aria-label="Minecraft Eggs home">
+          <img src={withBase("/favicon.png")} alt="" width={24} height={24} className="brand-mark rounded-md" />
           <span className="text-[0.95em] font-semibold text-white">
             Minecraft<span className="brand-dot">-Eggs</span>
           </span>
@@ -57,7 +58,7 @@ export default function App() {
         </a>
         <nav className="hidden items-center gap-1 md:flex" aria-label="Primary">
           {NAV.slice(1).map((n) => (
-            <a key={n.id} href={n.to} className={`nav-link${page === n.id ? " active" : ""}`}>{n.title}</a>
+            <a key={n.id} href={withBase(n.to)} className={`nav-link${page === n.id ? " active" : ""}`}>{n.title}</a>
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-3">
@@ -79,7 +80,7 @@ export default function App() {
       {menuOpen && (
         <nav className="sticky top-[56px] z-400 border-b border-linelt bg-[#0b0d14]/98 px-4 py-3 backdrop-blur-md md:hidden" aria-label="Mobile">
           {NAV.map((n) => (
-            <a key={n.id} href={n.to} className={`sidebar-link${page === n.id ? " active" : ""}`}>{n.title}</a>
+            <a key={n.id} href={withBase(n.to)} className={`sidebar-link${page === n.id ? " active" : ""}`}>{n.title}</a>
           ))}
         </nav>
       )}
@@ -99,7 +100,7 @@ export default function App() {
           <div className="flex flex-col justify-between gap-8 md:flex-row">
             <div className="max-w-[420px]">
               <div className="flex items-center gap-2.5">
-                <img src="/favicon.png" alt="" width={32} height={32} className="rounded-full ring-1 ring-linelt" />
+                <img src={withBase("/favicon.png")} alt="" width={32} height={32} className="rounded-full ring-1 ring-linelt" />
                 <span className="font-mono font-bold text-white">
                   Minecraft<span className="brand-dot">-Eggs</span>
                 </span>
@@ -115,7 +116,7 @@ export default function App() {
               <a className="foot-link" href={DISCORD_URL} target="_blank" rel="noopener">Support Discord</a>
               <a className="foot-link" href={NEST_URL} target="_blank" rel="noopener">Egg Nest</a>
               <a className="foot-link accent" href={SITE_URL}>Docs</a>
-              <a className="foot-link" href="/license/">License</a>
+              <a className="foot-link" href={withBase("/license/")}>License</a>
             </div>
           </div>
           <div className="mt-6 flex flex-col justify-between gap-2 border-t border-linelt pt-4 text-[0.75em] text-faint sm:flex-row">
@@ -199,7 +200,7 @@ function Palette({ onClose }: { onClose: () => void }) {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && results[0]) { location.href = results[0].to; onClose(); }
+            if (e.key === "Enter" && results[0]) { location.href = withBase(results[0].to); onClose(); }
           }}
           placeholder="Search docs…"
           className="w-full border-b border-linelt bg-transparent px-4 py-3.5 text-sm text-txt outline-none placeholder:text-faint"
@@ -207,7 +208,7 @@ function Palette({ onClose }: { onClose: () => void }) {
         <ul className="max-h-80 overflow-y-auto p-2">
           {results.map((r, i) => (
             <li key={r.to + r.title}>
-              <a href={r.to} onClick={onClose}
+              <a href={withBase(r.to)} onClick={onClose}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] ${i === 0 ? "bg-violet/15 text-white" : "text-txt2 hover:bg-white/5"}`}>
                 <span className="font-mono text-[10px] text-faint">{r.glyph}</span>
                 {r.title}

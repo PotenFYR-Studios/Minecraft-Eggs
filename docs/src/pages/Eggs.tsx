@@ -1,6 +1,6 @@
 /** /docs/eggs: catalog of the real egg: images, startup, features, all variables. */
 import { Container } from "lucide-react";
-import { catalog, EGG_JSON_URL, GROUP_ORDER, REPO_URL } from "../catalog";
+import { catalog, EGG_JSON_URL, GROUP_ORDER, REPO_URL, withBase } from "../catalog";
 import {
   CopyBlock, DocsShell, InlineCode, PageHeader, slug, VarGroup, type TocItem,
 } from "../components";
@@ -110,7 +110,7 @@ export default function Eggs() {
       <p>
         A real excerpt from <InlineCode>egg-minecraft-multi.json</InlineCode>. Get the full file{" "}
         <a href={EGG_JSON_URL} target="_blank" rel="noopener">here</a> or see it rendered on the{" "}
-        <a href="/examples/">Examples page</a>.
+        <a href={withBase("/examples/")}>Examples page</a>.
       </p>
       <CopyBlock lang="json" code={excerpt} />
     </DocsShell>

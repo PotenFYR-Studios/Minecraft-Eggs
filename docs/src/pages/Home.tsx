@@ -8,6 +8,7 @@ import {
   catalog, DISCORD_URL, EGG_JSON_URL, NEST_URL, REPO_URL, SERVER_TYPES,
 } from "../catalog";
 import { ArrowCard, CopyBlock, InlineCode, StatTile } from "../components";
+import { withBase } from "../catalog";
 import { DotPattern, GlowOrb, Marquee, Meteors } from "../magicui";
 
 const TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -58,7 +59,7 @@ export default function Home() {
             instance switching.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-            <a href="/docs/" className="btn btn-primary">Get Started</a>
+            <a href={withBase("/docs/")} className="btn btn-primary">Get Started</a>
             <a href="#server-types" className="btn btn-ghost">Browse Server Types</a>
             <a href={EGG_JSON_URL} target="_blank" rel="noopener" className="btn btn-ghost">
               <Package className="h-4 w-4" /> Download Egg JSON
@@ -109,7 +110,7 @@ export default function Home() {
               {SERVER_TYPES.filter((t) => t.category === cat).map((t) => {
                 const Icon = TYPE_ICONS[t.id] ?? Server;
                 return (
-                  <a key={t.id} href={`/docs/server-types/#${t.id}`} className="glass-card">
+                  <a key={t.id} href={withBase(`/docs/server-types/#${t.id}`)} className="glass-card">
                     <div className="flex items-center gap-3">
                       <div className="icon-tile"><Icon className="h-5 w-5" /></div>
                       <div>
@@ -128,7 +129,7 @@ export default function Home() {
           </div>
         ))}
         <div className="mt-8">
-          <a href="/docs/server-types/" className="btn btn-ghost btn-sm">
+          <a href={withBase("/docs/server-types/")} className="btn btn-ghost btn-sm">
             Full server type reference →
           </a>
         </div>

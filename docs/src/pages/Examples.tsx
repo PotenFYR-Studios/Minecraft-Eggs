@@ -1,5 +1,5 @@
 /** /examples: real egg JSON excerpt + panel variable cookbook. */
-import { catalog, EGG_JSON_URL } from "../catalog";
+import { catalog, EGG_JSON_URL, withBase } from "../catalog";
 import { CopyBlock, DocsShell, InlineCode, PageHeader, Pagination, slug, type TocItem } from "../components";
 
 const TOC: TocItem[] = [
@@ -81,7 +81,7 @@ export default function Examples() {
       <p>
         Open your server in the panel → <strong>Startup</strong> tab → paste each value into the
         matching variable. Anything left at its default keeps the behavior described in the{" "}
-        <a href="/docs/eggs/">Egg Catalog</a>.
+        <a href={withBase("/docs/eggs/")}>Egg Catalog</a>.
       </p>
 
       <h2 id="cookbook">Variable cookbook</h2>
