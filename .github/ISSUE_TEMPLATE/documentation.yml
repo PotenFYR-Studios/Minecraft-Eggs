@@ -1,0 +1,32 @@
+name: Documentation
+description: Report unclear, wrong or missing documentation
+labels: ["documentation"]
+body:
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where?
+      options:
+        - Docs site (minecraft-eggs.docs.potenfyr.in)
+        - README
+        - Egg variable descriptions
+        - CONTRIBUTING / SECURITY
+    validations:
+      required: true
+  - type: input
+    id: page
+    attributes:
+      label: Page or section
+      placeholder: e.g. /docs/server-types/#velocity
+    validations:
+      required: true
+  - type: textarea
+    id: issue
+    attributes:
+      label: What is wrong or missing?
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested fix
