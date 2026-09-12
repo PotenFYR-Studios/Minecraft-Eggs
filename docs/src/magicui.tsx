@@ -121,7 +121,7 @@ export function GlowOrb({
     <div
       aria-hidden
       className={`pointer-events-none absolute rounded-full blur-[140px] will-change-transform ${className ?? ""}`}
-      style={{ width: size, height: size, background: color, animation: "orb-pulse 3s ease-in-out infinite" }}
+      style={{ width: size, height: size, background: color }}
     />
   );
 }

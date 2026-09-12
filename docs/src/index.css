@@ -289,14 +289,7 @@ b {
   border-radius: 999px;
   background: var(--color-emerald);
   box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
-  animation: pulse-dot 2s ease-in-out infinite;
 }
-@keyframes pulse-dot {
-  50% {
-    opacity: 0.4;
-  }
-}
-
 .kbd {
   font-family: var(--font-mono);
   font-size: 10px;
@@ -661,12 +654,6 @@ code.inline {
   100% {
     transform: rotate(215deg) translateX(-620px);
     opacity: 0;
-  }
-}
-
-@keyframes orb-pulse {
-  50% {
-    opacity: 0.55;
   }
 }
 
