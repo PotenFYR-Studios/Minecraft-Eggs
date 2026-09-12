@@ -18,7 +18,8 @@ ARG JAVA_VERSION=all
 
 FROM ubuntu:jammy
 
-LABEL author="PotenFYR Studios" maintainer="support@potenfyr.in"
+LABEL author="PotenFYR Studios" maintainer="support@potenfyr.in" \
+      org.opencontainers.image.licenses="Apache-2.0 WITH Commons-Clause-1.0"
 
 ARG JAVA_VERSION=all
 ARG TARGETARCH

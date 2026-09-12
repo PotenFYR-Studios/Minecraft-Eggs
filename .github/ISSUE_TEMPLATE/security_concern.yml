@@ -1,0 +1,30 @@
+name: Security concern
+description: Non-critical security question or hardening idea (vulnerabilities → private reporting)
+labels: ["security"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > [!WARNING]
+        > **Do not disclose exploitable vulnerabilities here.** Use GitHub private vulnerability
+        > reporting (*Security → Report a vulnerability*) or email
+        > [support@potenfyr.in](mailto:support@potenfyr.in). This template is for hardening ideas
+        > and non-sensitive security questions only.
+  - type: dropdown
+    id: topic
+    attributes:
+      label: Topic
+      options:
+        - Container isolation / privileges
+        - Download integrity
+        - Secrets handling (GITHUB_TOKEN, RCON_PASSWORD, …)
+        - Script hardening
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: detail
+    attributes:
+      label: Details
+    validations:
+      required: true

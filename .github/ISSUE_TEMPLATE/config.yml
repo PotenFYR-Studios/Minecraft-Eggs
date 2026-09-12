@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Support Discord
+    url: https://discord.com/invite/zUaN2FPBec
+    about: Live help, panel questions and release announcements.
+  - name: Documentation
+    url: https://minecraft-eggs.docs.potenfyr.in
+    about: Import guide, server types, variables and examples.
+  - name: Unified Egg Nest
+    url: https://nest.potenfyr.in
+    about: Browse all PotenFYR egg collections.

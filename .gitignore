@@ -47,3 +47,9 @@ Thumbs.db
 CLAUDE.md
 .rtk
 .plan
+
+# Docs website (Vite + Bun) build artifacts
+docs/dist/
+docs/node_modules/
+docs/tsconfig.tsbuildinfo
+docs/src/generated/catalog.json

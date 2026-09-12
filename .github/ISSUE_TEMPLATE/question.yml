@@ -1,0 +1,24 @@
+name: Question
+description: Ask how something works before opening a bug or feature request
+labels: ["question"]
+body:
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I read the [docs](https://minecraft-eggs.docs.potenfyr.in) and the [FAQ-level guides](https://minecraft-eggs.docs.potenfyr.in/docs/)
+          required: true
+        - label: This is not a bug report (use the bug template for failures)
+          required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Your setup (if relevant)
+      description: Panel, SERVER_TYPE, MINECRAFT_VERSION, architecture, memory.
