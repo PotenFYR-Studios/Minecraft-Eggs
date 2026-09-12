@@ -1,6 +1,6 @@
 /** /docs: panel import steps, memory/type selection, variable usage, first boot. */
 import { DocsShell, CopyBlock, InlineCode, PageHeader, type TocItem } from "../components";
-import { EGG_JSON_URL } from "../catalog";
+import { EGG_JSON_URL, withBase } from "../catalog";
 
 const TOC: TocItem[] = [
   { id: "import", text: "Import the egg", level: 2 },
@@ -33,7 +33,7 @@ export default function Docs() {
       <p>
         The egg is format <InlineCode>PTDL_v2</InlineCode> and self-updates by default, so after the
         first import you rarely need to re-upload it (see{" "}
-        <a href="/docs/eggs/#egg-self-update">Egg self-update</a>).
+        <a href={withBase("/docs/eggs/#egg-self-update")}>Egg self-update</a>).
       </p>
 
       <h2 id="create">Create the server</h2>
@@ -55,7 +55,7 @@ export default function Docs() {
       <h2 id="variables">Set the core variables</h2>
       <p>
         Two variables drive almost every install. The full reference of all{" "}
-        {34} variables lives in the <a href="/docs/eggs/">Egg Catalog</a>.
+        {34} variables lives in the <a href={withBase("/docs/eggs/")}>Egg Catalog</a>.
       </p>
       <CopyBlock lang="text" code={"SERVER_TYPE       paper      # engine (see Server Types page)\nMINECRAFT_VERSION 1.21.4     # or latest / latest-snapshot\nBUILD_NUMBER      latest     # optional pin (Paper, Purpur, Folia, Velocity…)"} />
       <p>

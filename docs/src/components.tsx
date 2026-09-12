@@ -1,7 +1,7 @@
 /** Shared page building blocks: code copy, stat tiles, variable tables, docs shell. */
 import { useEffect, useState, type ReactNode } from "react";
 import { ArrowRight, Check, ChevronDown, Copy, User, Wrench } from "lucide-react";
-import { type EggVariable, type PageId, varsByGroup } from "./catalog";
+import { type EggVariable, type PageId, varsByGroup, withBase } from "./catalog";
 import { NumberTicker } from "./magicui";
 
 /* ------------------------------------------------------------ CopyBlock */
@@ -175,7 +175,7 @@ export function Pagination({ prev, next }: { prev?: { to: string; title: string 
   return (
     <div className="mt-14 grid gap-4 sm:grid-cols-2">
       {prev ? (
-        <a href={prev.to} className="rounded-xl border border-linelt bg-white/[0.02] p-4 transition hover:-translate-y-0.5 hover:border-violet/50">
+        <a href={withBase(prev.to)} className="rounded-xl border border-linelt bg-white/[0.02] p-4 transition hover:-translate-y-0.5 hover:border-violet/50">
           <div className="mono-label mb-1">← Previous</div>
           <div className="text-sm text-txt hover:text-link">{prev.title}</div>
         </a>
@@ -183,7 +183,7 @@ export function Pagination({ prev, next }: { prev?: { to: string; title: string 
         <span />
       )}
       {next && (
-        <a href={next.to} className="rounded-xl border border-linelt bg-white/[0.02] p-4 text-right transition hover:-translate-y-0.5 hover:border-pink/50">
+        <a href={withBase(next.to)} className="rounded-xl border border-linelt bg-white/[0.02] p-4 text-right transition hover:-translate-y-0.5 hover:border-pink/50">
           <div className="mono-label mb-1">Next →</div>
           <div className="text-sm text-txt hover:text-linkh">{next.title}</div>
         </a>
@@ -231,7 +231,7 @@ function SidebarGroup({
       {open && (
         <div>
           {links.map((l) => (
-            <a key={l.id} href={l.to} className={`sidebar-link${l.id === page ? " active" : ""}`}>
+            <a key={l.id} href={withBase(l.to)} className={`sidebar-link${l.id === page ? " active" : ""}`}>
               {l.title}
             </a>
           ))}
@@ -275,12 +275,12 @@ export function DocsShell({
 
       <main className="doc min-w-0 max-w-6xl">
         <nav className="section-eyebrow text-faint" aria-label="Breadcrumb">
-          <a href="/" className="no-underline hover:text-violet">Minecraft Eggs Docs</a>
+          <a href={withBase("/")} className="no-underline hover:text-violet">Minecraft Eggs Docs</a>
           {crumbs.map((c) => (
             <span key={c.label}>
               {" / "}
               {c.to
-                ? <a href={c.to} className="no-underline hover:text-violet">{c.label}</a>
+                ? <a href={withBase(c.to)} className="no-underline hover:text-violet">{c.label}</a>
                 : c.label}
             </span>
           ))}
@@ -318,7 +318,7 @@ export function PageHeader({ eyebrow, title, accent, lead }: { eyebrow: string; 
 /* ------------------------------------------------------------- ArrowCard */
 export function ArrowCard({ to, title, desc, icon }: { to: string; title: string; desc: string; icon?: ReactNode }) {
   return (
-    <a href={to} className="glass-card">
+    <a href={withBase(to)} className="glass-card">
       <div className="flex items-center gap-3">
         {icon && <div className="icon-tile">{icon}</div>}
         <div className="text-[0.98em] font-semibold text-white">{title}</div>
