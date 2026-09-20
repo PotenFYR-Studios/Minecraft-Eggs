@@ -1,9 +1,8 @@
 <!-- markdownlint-disable -->
 
-
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:8b5cf6,50:ec4899,100:f97316&height=220&section=header&text=Minecraft%20Eggs&fontSize=52&fontColor=ffffff&fontAlignY=34&animation=twinkling" width="100%" alt="Minecraft Eggs banner"/>
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:8b5cf6,50:ec4899,100:f97316&height=220&section=header&text=Minecraft%20Eggs&fontSize=52&fontColor=ffffff&fontAlignY=34&desc=One%20universal%20egg%20%C2%B7%2019%20engines%20%C2%B7%20Java%208%20to%2026&descSize=18&descAlignY=55&animation=twinkling" width="100%" alt="Minecraft Eggs banner"/>
 
 [![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=20&pause=1200&color=8B5CF6&center=true&vCenter=true&width=800&lines=One+universal+egg+for+every+Minecraft+server;Pterodactyl+%C2%B7+Pelican+%C2%B7+Feather+Panel;19+engines+%C2%B7+Alpha+to+26.x;Automatic+Java+%C2%B7+safe+switching)](https://github.com/PotenFYR-Studios/Minecraft-Eggs)
 
@@ -147,9 +146,24 @@ See [LICENSE](LICENSE) for the authoritative license text; this summary never ov
 
 Every public PotenFYR Studios repository on one live chart, served by [star-history.com](https://star-history.com).
 
-## Contributing
+## 📫 Connect With Us
 
-Contributions make the open-source community such an amazing place to learn, inspire and create. Any contributions you make are **greatly appreciated** - see [CONTRIBUTING.md](CONTRIBUTING.md) and the [good first issues](https://github.com/PotenFYR-Studios/Minecraft-Eggs/labels/good%20first%20issue). Security concerns: please use [SECURITY.md](SECURITY.md) (private vulnerability reporting), not public issues.
+<div align="center">
+
+[![GitHub](https://img.shields.io/badge/GitHub-PotenFYR--Studios-181717?style=for-the-badge&logo=github&labelColor=1c1e26)](https://github.com/PotenFYR-Studios)
+[![Website](https://img.shields.io/badge/Website-potenfyr.in-8b5cf6?style=for-the-badge&logo=googlechrome&labelColor=1c1e26)](https://potenfyr.in)
+[![Community](https://img.shields.io/badge/Community-Discord-5865F2?style=for-the-badge&logo=discord&labelColor=1c1e26)](https://discord.com/invite/zUaN2FPBec)
+[![Modrinth](https://img.shields.io/badge/Modrinth-Organization-1bd96a?style=for-the-badge&logo=modrinth&labelColor=1c1e26)](https://modrinth.com/organization/potenfyr)
+
+</div>
+
+## 🎯 Vision
+
+✨ **Universal** (19 engines, Java 8–26) · ⚡ **Performant** (industry-tuned GC defaults) · 🔄 **Reliable** (graceful stops, safe version switching) · 🤝 **Community-Focused**
+
+## 👥 Contributors
+
+Contributions are **greatly appreciated** - see [CONTRIBUTING.md](CONTRIBUTING.md) and the [good first issues](https://github.com/PotenFYR-Studios/Minecraft-Eggs/labels/good%20first%20issue). Security concerns: please use [SECURITY.md](SECURITY.md) (private vulnerability reporting), not public issues.
 
 <a href="https://github.com/PotenFYR-Studios/Minecraft-Eggs/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=PotenFYR-Studios/Minecraft-Eggs" alt="Minecraft-Eggs contributors" />
