@@ -96,10 +96,12 @@ jobs:
             return 1
           }
 
-          boot_and_wait; rc=$?
+          rc=0
+          boot_and_wait || rc=$?
           if [ "${rc}" = "11" ]; then
             echo "EULA generated - accepting it and booting again (panel flow)"
-            boot_and_wait; rc=$?
+            rc=0
+            boot_and_wait || rc=$?
           fi
           if [ "${rc}" != "0" ]; then
             echo "::error::${{ matrix.server }} never became ready"
