@@ -86,8 +86,10 @@ jobs:
             [ -n "${ready}" ] && return 0
             # Java Edition EULA handshake (the real panel flow): boot 1
             # installs the server, generates eula.txt and exits; accept it
-            # and boot again.
+            # and boot again. The file is owned by the container user, so
+            # unlink + recreate instead of overwriting in place.
             if [ -f "${RUNNER_TEMP}/mc/eula.txt" ] && ! grep -qi "eula=true" "${RUNNER_TEMP}/mc/eula.txt"; then
+              rm -f "${RUNNER_TEMP}/mc/eula.txt"
               printf 'eula=true\n' > "${RUNNER_TEMP}/mc/eula.txt"
               return 11
             fi
