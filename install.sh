@@ -428,8 +428,11 @@ ensure_server_properties() {
     fi
     {
         printf 'server-ip=0.0.0.0\n'
-        printf 'server-port=25565\n'
-        printf 'query.port=25565\n'
+        # Honor the panel-assigned port; hardcoding 25565 made every server
+        # with a customized variable listen on the wrong port in
+        # standalone/Docker contexts (panels rewrite the port themselves).
+        printf 'server-port=%s\n' "${SERVER_PORT:-25565}"
+        printf 'query.port=%s\n' "${SERVER_PORT:-25565}"
         printf 'motd=%s\n' "${MOTD:-A Minecraft Server}"
         printf 'max-players=%s\n' "${MAX_PLAYERS:-20}"
         printf 'view-distance=%s\n' "${VIEW_DISTANCE:-10}"
