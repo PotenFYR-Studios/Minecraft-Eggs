@@ -62,29 +62,44 @@ jobs:
       - name: Boot server via the egg installer + launcher
         run: |
           mkdir -p "${RUNNER_TEMP}/mc" && chmod 777 "${RUNNER_TEMP}/mc"
-          # Accept the EULA up front the way a panel user would, so the server
-          # boots straight through instead of exiting to generate eula.txt.
-          if [ "${{ matrix.proto }}" = "tcp" ]; then printf 'eula=true\n' > "${RUNNER_TEMP}/mc/eula.txt"; fi
-          docker run -d --name "mc-${{ matrix.server }}" \
-            -e SERVER_TYPE=${{ matrix.server }} \
-            -e SERVER_PORT=${{ matrix.port }} \
-            -e ONLINE_MODE=0 \
-            -e AUTO_UPDATE=0 \
-            -e "JAVA_FLAGS=-Xmx1024M -Xms512M" \
-            -v "${RUNNER_TEMP}/mc:/home/container" \
-            minecraft-eggs:ci
 
-          ready=""
-          for i in $(seq 1 240); do
-            if docker logs "mc-${{ matrix.server }}" 2>&1 | grep -q '${{ matrix.ready }}'; then
-              ready=1; break
+          boot_and_wait() {
+            docker rm -f "mc-${{ matrix.server }}" >/dev/null 2>&1 || true
+            docker run -d --name "mc-${{ matrix.server }}" \
+              -e SERVER_TYPE=${{ matrix.server }} \
+              -e SERVER_PORT=${{ matrix.port }} \
+              -e ONLINE_MODE=0 \
+              -e AUTO_UPDATE=0 \
+              -e "JAVA_FLAGS=-Xmx1024M -Xms512M" \
+              -v "${RUNNER_TEMP}/mc:/home/container" \
+              minecraft-eggs:ci >/dev/null
+            ready=""
+            for i in $(seq 1 240); do
+              if docker logs "mc-${{ matrix.server }}" 2>&1 | grep -q '${{ matrix.ready }}'; then
+                ready=1; break
+              fi
+              if [ "$(docker inspect -f '{{.State.Running}}' "mc-${{ matrix.server }}" 2>/dev/null)" != "true" ]; then
+                break
+              fi
+              sleep 2
+            done
+            [ -n "${ready}" ] && return 0
+            # Java Edition EULA handshake (the real panel flow): boot 1
+            # installs the server, generates eula.txt and exits; accept it
+            # and boot again.
+            if [ -f "${RUNNER_TEMP}/mc/eula.txt" ] && ! grep -qi "eula=true" "${RUNNER_TEMP}/mc/eula.txt"; then
+              printf 'eula=true\n' > "${RUNNER_TEMP}/mc/eula.txt"
+              return 11
             fi
-            if [ "$(docker inspect -f '{{.State.Running}}' "mc-${{ matrix.server }}" 2>/dev/null)" != "true" ]; then
-              break
-            fi
-            sleep 2
-          done
-          if [ -z "${ready}" ]; then
+            return 1
+          }
+
+          boot_and_wait; rc=$?
+          if [ "${rc}" = "11" ]; then
+            echo "EULA generated - accepting it and booting again (panel flow)"
+            boot_and_wait; rc=$?
+          fi
+          if [ "${rc}" != "0" ]; then
             echo "::error::${{ matrix.server }} never became ready"
             docker logs "mc-${{ matrix.server }}" 2>&1 | tail -n 60
             exit 1

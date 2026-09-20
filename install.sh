@@ -926,6 +926,25 @@ install_nukkit() {
 install_pocketmine() {
     log "Installing PocketMine-MP (always latest)"
     download "https://github.com/pmmp/PocketMine-MP/releases/latest/download/PocketMine-MP.phar" "PocketMine-MP.phar"
+    # PM5 requires PMMP's custom PHP build (pmmpthread, chunkutils2, ...);
+    # distro PHP cannot run it. Install the official binary next to the phar
+    # so the launcher can use ./bin/php/bin/php.
+    if [ ! -x "bin/php/bin/php" ]; then
+        case "$(uname -m)" in
+            aarch64|arm64) _pm_php_url="https://github.com/pmmp/PHP-Binaries/releases/latest/download/PHP-Linux-aarch64.tar.gz" ;;
+            *)             _pm_php_url="https://github.com/pmmp/PHP-Binaries/releases/latest/download/PHP-Linux-x86_64.tar.gz" ;;
+        esac
+        if download "${_pm_php_url}" "pm-php.tar.gz" \
+            && mkdir -p bin \
+            && tar -xzf pm-php.tar.gz -C bin \
+            && rm -f pm-php.tar.gz \
+            && [ -x "bin/php/bin/php" ]; then
+            ok "PocketMine PHP binary installed (bin/php/bin/php)"
+        else
+            rm -f pm-php.tar.gz
+            warn "Could not fetch the PMMP PHP binary - PocketMine may fail to start on distro PHP."
+        fi
+    fi
     RESOLVED_VERSION="latest"
     ensure_server_properties
     ok "PocketMine-MP install complete"

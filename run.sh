@@ -1203,7 +1203,11 @@ print_boot_card() {
     local entry_point
     case "${TYPE}" in
         bedrock)    entry_point="./bedrock_server" ;;
-        pocketmine) entry_point="php ./PocketMine-MP.phar" ;;
+        pocketmine) if [ -x ./bin/php/bin/php ]; then
+                        entry_point="./bin/php/bin/php ./PocketMine-MP.phar"
+                    else
+                        entry_point="php ./PocketMine-MP.phar"
+                    fi ;;
         custom)     entry_point="${CUSTOM_COMMAND:-java -Xmx${mem_mb}M -jar ${SERVER_JARFILE:-server.jar}}" ;;
         *)
             if [ -f unix_args.txt ] && { [ "${TYPE}" = "forge" ] || [ "${TYPE}" = "neoforge" ]; }; then
