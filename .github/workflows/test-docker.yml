@@ -32,7 +32,9 @@ jobs:
             ready: "Done ("
             port: "25565"
             proto: tcp
-          # Bedrock ecosystem (UDP)
+          # Bedrock ecosystem. PocketMine's RakNet is UDP; modern Bedrock
+          # builds default to transport=nethernet, which binds the game port
+          # on TCP (an internal UDP channel on a separate port comes with it).
           - server: pocketmine
             ready: "Done ("
             port: "19132"
@@ -40,7 +42,7 @@ jobs:
           - server: bedrock
             ready: "Server started"
             port: "19132"
-            proto: udp
+            proto: tcp
 
     steps:
       - name: Checkout repository
