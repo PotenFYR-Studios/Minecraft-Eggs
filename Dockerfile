@@ -28,6 +28,20 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8
 
+# Slim pull size at the dpkg layer: never unpack man pages, HTML docs,
+# lintian metadata or non-English locales (copyright files, English and the
+# locale alias stay). Applied before every install below; no runtime impact.
+RUN printf '%s\n' \
+    'path-exclude=/usr/share/doc/*' \
+    'path-include=/usr/share/doc/*/copyright' \
+    'path-exclude=/usr/share/man/*' \
+    'path-exclude=/usr/share/info/*' \
+    'path-exclude=/usr/share/lintian/*' \
+    'path-exclude=/usr/share/locale/*' \
+    'path-include=/usr/share/locale/en*' \
+    'path-include=/usr/share/locale/locale.alias' \
+    > /etc/dpkg/dpkg.cfg.d/01-potenfyr-slim
+
 # Base tooling + PHP (PocketMine-MP) + native libraries (Bedrock dedicated server)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -103,7 +117,8 @@ RUN useradd -d /home/container -m -s /bin/bash container \
 # container user). /usr/local/bin, /entrypoint.sh, /run.sh and /install.sh
 # are symlinks kept for panel startup-string compatibility.
 COPY install.sh entrypoint.sh run.sh install-java.sh /opt/potenfyr/
-RUN chmod 755 /opt/potenfyr \
+RUN sed -i 's/\r$//' /opt/potenfyr/* 2>/dev/null || true \
+    && chmod 755 /opt/potenfyr \
     && chown root:root /opt/potenfyr/* \
     && chmod 755 /opt/potenfyr/run.sh /opt/potenfyr/entrypoint.sh /opt/potenfyr/install.sh /opt/potenfyr/install-java.sh \
     && ln -sf /opt/potenfyr/entrypoint.sh /entrypoint.sh \

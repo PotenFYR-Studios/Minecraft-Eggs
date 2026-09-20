@@ -10,7 +10,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }} # ghcr.io/potenfyr-studios/minecraft-eggs
+  IMAGE_NAME: potenfyr-studios/minecraft-eggs
 
 permissions:
   contents: read

@@ -1,0 +1,116 @@
+# Real-world server verification: boots actual Minecraft servers (vanilla,
+# Paper, PocketMine, Bedrock) through the egg's own install + launcher path
+# inside the built image, waits for the engine's ready marker, confirms the
+# assigned port is listening, and asserts a graceful SIGTERM stop.
+name: Test Docker & Minecraft Servers
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  boot-servers:
+    name: Boot ${{ matrix.server }} through the egg
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Java Edition engines (ready marker = the vanilla log "Done (…s)!")
+          - server: vanilla
+            ready: "Done ("
+            port: "25565"
+            proto: tcp
+          - server: paper
+            ready: "Done ("
+            port: "25565"
+            proto: tcp
+          # Bedrock ecosystem (UDP)
+          - server: pocketmine
+            ready: "Done ("
+            port: "19132"
+            proto: udp
+          - server: bedrock
+            ready: "Server started"
+            port: "19132"
+            proto: udp
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Build image
+        run: docker build -t minecraft-eggs:ci .
+
+      - name: JVM sanity - every bundled JRE must execute
+        if: matrix.server == 'vanilla'
+        run: |
+          docker run --rm --entrypoint /bin/bash minecraft-eggs:ci -c '
+            set -e
+            for j in /opt/java/*/bin/java; do "$j" -version 2>&1 | head -n 1; done
+            n=$(ls -d /opt/java/*/ 2>/dev/null | wc -l)
+            echo "Bundled JRE dirs: ${n}"
+            [ "${n}" -ge 3 ]'
+
+      - name: Boot server via the egg installer + launcher
+        run: |
+          mkdir -p "${RUNNER_TEMP}/mc" && chmod 777 "${RUNNER_TEMP}/mc"
+          # Accept the EULA up front the way a panel user would, so the server
+          # boots straight through instead of exiting to generate eula.txt.
+          if [ "${{ matrix.proto }}" = "tcp" ]; then printf 'eula=true\n' > "${RUNNER_TEMP}/mc/eula.txt"; fi
+          docker run -d --name "mc-${{ matrix.server }}" \
+            -e SERVER_TYPE=${{ matrix.server }} \
+            -e SERVER_PORT=${{ matrix.port }} \
+            -e ONLINE_MODE=0 \
+            -e AUTO_UPDATE=0 \
+            -e "JAVA_FLAGS=-Xmx1024M -Xms512M" \
+            -v "${RUNNER_TEMP}/mc:/home/container" \
+            minecraft-eggs:ci
+
+          ready=""
+          for i in $(seq 1 240); do
+            if docker logs "mc-${{ matrix.server }}" 2>&1 | grep -q '${{ matrix.ready }}'; then
+              ready=1; break
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' "mc-${{ matrix.server }}" 2>/dev/null)" != "true" ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ -z "${ready}" ]; then
+            echo "::error::${{ matrix.server }} never became ready"
+            docker logs "mc-${{ matrix.server }}" 2>&1 | tail -n 60
+            exit 1
+          fi
+          echo "${{ matrix.server }} reached its ready marker"
+
+      - name: Assigned port is listening
+        run: |
+          flag="ltn"; [ "${{ matrix.proto }}" = "udp" ] && flag="lun"
+          docker exec "mc-${{ matrix.server }}" bash -c "ss -${flag} 2>/dev/null | grep -qE ':${{ matrix.port }}\b'"
+
+      - name: Graceful stop (SIGTERM) and persisted world files
+        run: |
+          docker stop --time 30 "mc-${{ matrix.server }}" >/dev/null
+          code=$(docker inspect -f '{{.State.ExitCode}}' "mc-${{ matrix.server }}")
+          echo "Exit code: ${code}"
+          case "${code}" in 0|130|143) ;; *) echo "::error::unclean exit"; exit 1 ;; esac
+          case "${{ matrix.server }}" in
+            vanilla|paper)
+              test -f "${RUNNER_TEMP}/mc/world/level.dat" && echo "World persisted (level.dat)" ;;
+            pocketmine)
+              test -d "${RUNNER_TEMP}/mc/worlds" && echo "Worlds directory persisted" ;;
+            bedrock)
+              test -d "${RUNNER_TEMP}/mc/db" && echo "Bedrock db directory persisted" ;;
+          esac
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f "mc-${{ matrix.server }}" 2>/dev/null || true

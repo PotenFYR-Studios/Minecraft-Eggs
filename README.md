@@ -94,6 +94,9 @@ runs native, PocketMine runs PHP 8.x), downloading missing runtimes on demand, w
 | `JAVA_VERSION` | *(auto)* | Override auto-detected Java (`8`–`26`) |
 | `GC_TYPE` | `auto` | `auto` (Aikar G1GC), `zgc` (8 GB+ low-pause), `parallel` |
 | `AUTO_UPDATE` | `1` | Refresh the jar on reinstall |
+| `GIT_REPO_URL` / `GIT_BRANCH` | *(empty)* | Sync plugins/mods/configs from a git repo at boot and on the auto-update poll |
+| `GIT_PRESERVE_ENV` | `1` | Every existing `.env` is restored to its original location after each sync - repo updates can never clobber live credentials (`0` = repo wins) |
+| `GIT_EXCLUDE` | *(empty)* | Glob patterns git sync must never install or overwrite (e.g. `plugins/keep/*`) |
 
 Full reference with defaults, validation rules and access levels:
 [Egg Catalog](https://minecraft-eggs.docs.potenfyr.in/docs/eggs/) · ready-made setups:

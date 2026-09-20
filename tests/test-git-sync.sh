@@ -30,7 +30,7 @@ error() { printf '[error] %s\n' "$*" >&2; }
 phase() { printf '\n== %s ==\n' "$*"; }
 _egg_error_log() { :; }
 
-python tests/extract_funcs.py run.sh > "${SANDBOX}/functions.sh" || exit 1
+python3 tests/extract_funcs.py run.sh > "${SANDBOX}/functions.sh" || exit 1
 # Load the launcher's top-level functions (definitions only - sourcing has no
 # side effects) so the real sync engine code under test is exercised.
 # shellcheck disable=SC1090
@@ -109,6 +109,33 @@ GIT_REPO_URL="file://${REPO}"
 GIT_BRANCH="test"
 sync_git_repo || t_fail "branch switch failed"
 [ -f "${SERVER_DIR}/plugins/Other/other.jar" ] && t_pass "branch content synced" || t_fail "branch switch failed"
+
+echo "--- T9: GIT_PRESERVE_ENV keeps live .env credentials across updates ---"
+GIT_BRANCH=""
+mkdir -p "${SERVER_DIR}/plugins/Essentials"
+printf 'DB_PASSWORD=live-secret\n' > "${SERVER_DIR}/.env"
+printf 'PLUGIN_KEY=live-plugin-secret\n' > "${SERVER_DIR}/plugins/Essentials/.env"
+commit ".env" "DB_PASSWORD=repo-override" "c4 repo env"
+commit "plugins/Essentials/.env" "PLUGIN_KEY=repo-plugin-override" "c4 plugin env"
+sync_git_repo || t_fail ".env update sync failed"
+grep -q "live-secret" "${SERVER_DIR}/.env" && t_pass "root .env preserved (old credentials win)" || t_fail "root .env clobbered"
+grep -q "live-plugin-secret" "${SERVER_DIR}/plugins/Essentials/.env" && t_pass "sub-path .env restored in its original location" || t_fail "sub-path .env clobbered"
+
+echo "--- T10: GIT_PRESERVE_ENV=0 lets the repository's .env win ---"
+GIT_PRESERVE_ENV=0
+commit "plugins/Essentials/.env" "PLUGIN_KEY=repo-plugin-new" "c5 repo env update"
+sync_git_repo || t_fail "opt-out sync failed"
+grep -q "repo-plugin-new" "${SERVER_DIR}/plugins/Essentials/.env" && t_pass "repo .env wins when opted out" || t_fail "repo .env not applied"
+unset GIT_PRESERVE_ENV
+
+echo "--- T11: GIT_EXCLUDE keeps user paths out of the sync ---"
+GIT_EXCLUDE="plugins/Other"
+commit "plugins/Other/other.jar" "should-not-land" "c6 excluded"
+commit "plugins/Essentials/Essentials.jar" "fake-jar-v4" "c6 tracked update"
+sync_git_repo || t_fail "exclusion sync failed"
+grep -q "should-not-land" "${SERVER_DIR}/plugins/Other/other.jar" && t_fail "GIT_EXCLUDE ignored" || t_pass "excluded path never installed"
+grep -q "fake-jar-v4" "${SERVER_DIR}/plugins/Essentials/Essentials.jar" && t_pass "non-excluded paths still sync" || t_fail "exclusion broke normal sync"
+unset GIT_EXCLUDE
 
 rm -rf "${SANDBOX}"
 echo
