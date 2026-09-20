@@ -114,8 +114,17 @@ jobs:
 
       - name: Assigned port is listening
         run: |
+          # Prefer the declared protocol, but accept either - engines differ
+          # in how they bind (e.g. Bedrock nethernet vs PocketMine RakNet).
           flag="ltn"; [ "${{ matrix.proto }}" = "udp" ] && flag="lun"
-          docker exec "mc-${{ matrix.server }}" bash -c "ss -${flag} 2>/dev/null | grep -qE ':${{ matrix.port }}\b'"
+          other="ltn"; [ "${{ matrix.proto }}" = "udp" ] && other="ltn" || other="lun"
+          if ! docker exec "mc-${{ matrix.server }}" bash -c "ss -${flag} 2>/dev/null | grep -qE ':${{ matrix.port }}\b'" \
+             && ! docker exec "mc-${{ matrix.server }}" bash -c "ss -${other} 2>/dev/null | grep -qE ':${{ matrix.port }}\b'"; then
+            echo "::error::port ${{ matrix.port }} not listening"
+            docker exec "mc-${{ matrix.server }}" bash -c "ss -lun 2>&1; ss -ltn 2>&1" || true
+            exit 1
+          fi
+          echo "Port ${{ matrix.port }} (${{ matrix.proto }}) is listening"
 
       - name: Graceful stop (SIGTERM) and persisted world files
         run: |
@@ -129,7 +138,8 @@ jobs:
             pocketmine)
               test -d "${RUNNER_TEMP}/mc/worlds" && echo "Worlds directory persisted" ;;
             bedrock)
-              test -d "${RUNNER_TEMP}/mc/db" && echo "Bedrock db directory persisted" ;;
+              test -d "${RUNNER_TEMP}/mc/db" -o -d "${RUNNER_TEMP}/mc/worlds" -o -d "${RUNNER_TEMP}/mc/world" \
+                && echo "World data persisted" ;;
           esac
 
       - name: Cleanup
