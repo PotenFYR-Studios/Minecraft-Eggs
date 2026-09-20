@@ -928,22 +928,33 @@ install_pocketmine() {
     download "https://github.com/pmmp/PocketMine-MP/releases/latest/download/PocketMine-MP.phar" "PocketMine-MP.phar"
     # PM5 requires PMMP's custom PHP build (pmmpthread, chunkutils2, ...);
     # distro PHP cannot run it. Install the official binary next to the phar
-    # so the launcher can use ./bin/php/bin/php.
+    # so the launcher can use ./bin/php/bin/php. PMMP publishes x86_64 only;
+    # other architectures keep the system PHP (best effort).
     if [ ! -x "bin/php/bin/php" ]; then
+        _pm_php_urls=""
         case "$(uname -m)" in
-            aarch64|arm64) _pm_php_url="https://github.com/pmmp/PHP-Binaries/releases/latest/download/PHP-Linux-aarch64.tar.gz" ;;
-            *)             _pm_php_url="https://github.com/pmmp/PHP-Binaries/releases/latest/download/PHP-Linux-x86_64.tar.gz" ;;
+            x86_64|amd64)
+                _pm_php_urls="https://github.com/pmmp/PHP-Binaries/releases/latest/download/PHP-8.4-Linux-x86_64-PM5.tar.gz https://github.com/pmmp/PHP-Binaries/releases/latest/download/PHP-Linux-x86_64-PM5.tar.gz https://github.com/pmmp/PHP-Binaries/releases/latest/download/PHP-Linux-x86_64.tar.gz" ;;
+            aarch64|arm64)
+                _pm_php_urls="https://github.com/pmmp/PHP-Binaries/releases/latest/download/PHP-8.4-Linux-aarch64-PM5.tar.gz https://github.com/pmmp/PHP-Binaries/releases/latest/download/PHP-Linux-aarch64-PM5.tar.gz" ;;
         esac
-        if download "${_pm_php_url}" "pm-php.tar.gz" \
-            && mkdir -p bin \
-            && tar -xzf pm-php.tar.gz -C bin \
-            && rm -f pm-php.tar.gz \
-            && [ -x "bin/php/bin/php" ]; then
-            ok "PocketMine PHP binary installed (bin/php/bin/php)"
-        else
+        for _pm_php_url in ${_pm_php_urls}; do
+            if download "${_pm_php_url}" "pm-php.tar.gz" \
+                && tar -xzf pm-php.tar.gz \
+                && rm -f pm-php.tar.gz; then
+                # The tarball root contains bin/php7/ - normalize so the
+                # launcher's canonical path (bin/php/bin/php) exists too.
+                if [ -d "bin/php7" ] && [ ! -e "bin/php" ]; then
+                    mv -f "bin/php7" "bin/php" 2>/dev/null || true
+                fi
+                if [ -x "bin/php/bin/php" ] || [ -x "bin/php7/bin/php" ]; then
+                    ok "PocketMine PHP binary installed ($( [ -x "bin/php/bin/php" ] && echo bin/php/bin/php || echo bin/php7/bin/php ))"
+                    break
+                fi
+            fi
             rm -f pm-php.tar.gz
-            warn "Could not fetch the PMMP PHP binary - PocketMine may fail to start on distro PHP."
-        fi
+        done
+        { [ -x "bin/php/bin/php" ] || [ -x "bin/php7/bin/php" ]; } || warn "No PMMP PHP binary available for $(uname -m) - PocketMine may fail to start on distro PHP."
     fi
     RESOLVED_VERSION="latest"
     ensure_server_properties

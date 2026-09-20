@@ -1282,12 +1282,18 @@ case "${TYPE}" in
         ;;
     pocketmine)
         [ ! -f ./PocketMine-MP.phar ] && { error "PocketMine-MP.phar not found in $(pwd)"; sleep 3; exit 1; }
+        # Prefer PMMP's own PHP build (installed by the installer) - PM5
+        # needs pmmpthread & co which distro PHP lacks.
+        PM_PHP="php"
+        if [ -x ./bin/php/bin/php ]; then PM_PHP="./bin/php/bin/php"
+        elif [ -x ./bin/php7/bin/php ]; then PM_PHP="./bin/php7/bin/php"
+        fi
         phase "Server Launch"
         print_boot_card
         sweep_stray_processes quick
-        log "Executing: php PocketMine-MP.phar"
-        printf "%b>>> php ./PocketMine-MP.phar --no-wizard%b\n\n" "${C_GREEN}${C_BOLD}" "${C_RESET}"
-        launch_server "php ./PocketMine-MP.phar --no-wizard"
+        log "Executing: ${PM_PHP} PocketMine-MP.phar"
+        printf "%b>>> %b ./PocketMine-MP.phar --no-wizard%b\n\n" "${C_GREEN}${C_BOLD}" "${PM_PHP}" "${C_RESET}"
+        launch_server "${PM_PHP} ./PocketMine-MP.phar --no-wizard"
         EXIT_STATUS=$?
         if [ ${EXIT_STATUS} -ne 0 ] && [ ${EXIT_STATUS} -ne 130 ] && [ ${EXIT_STATUS} -ne 143 ]; then
             _egg_error_log "launcher" "=== CRASH: exit=${EXIT_STATUS} type=${TYPE} ==="
@@ -1357,6 +1363,20 @@ else
         fi
     fi
     JAVA_CMD="java -Xms128M -Xmx${MEMORY}M ${JAVA_FLAGS} -jar ${SERVER_JARFILE:-server.jar} ${EXTRA_ARGS}"
+fi
+
+# Java runtime selection: the installer records the Java generation the
+# selected server needs in .mc-instance.conf (java_for_mc). Prefer that
+# bundled JRE over the PATH default so e.g. MC 26.x runs on the bundled
+# Java 26 instead of Java 21. User JAVA_VERSION overrides flow through the
+# same conf, so explicit choices are respected.
+instance_java="$(grep -E '^java=' .mc-instance.conf 2>/dev/null | tail -n1 | cut -d= -f2-)"
+if [ -n "${instance_java}" ] && [ -x "/opt/java/${instance_java}/bin/java" ]; then
+    if ! java -version 2>&1 | head -n1 | grep -q "version ${instance_java}\."; then
+        export JAVA_HOME="/opt/java/${instance_java}"
+        export PATH="${JAVA_HOME}/bin:${PATH}"
+        info "Using bundled Java ${instance_java} for this server (instance metadata)."
+    fi
 fi
 
 phase "Server Launch"
