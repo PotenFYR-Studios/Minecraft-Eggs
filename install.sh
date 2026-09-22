@@ -119,21 +119,6 @@ fail() {
     exit 1
 }
 
-# ---------------------------------------------------------------------------
-# Persistent error logging & traced execution (kept inside the server dir)
-# ---------------------------------------------------------------------------
-ERROR_LOG="${SERVER_DIR}/install-error.log"
-
-log_rotate_file() { # keep the log bounded (~512 KB)
-    local max=524288
-    [ -f "$1" ] || return 0
-    [ "$(wc -c < "$1" 2>/dev/null || echo 0)" -le "$max" ] || mv -f "$1" "$1.old" 2>/dev/null || true
-}
-
-log_event() {
-    printf '[%s] %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*" >> "${ERROR_LOG}" 2>/dev/null || true
-}
-
 PROJECT_TYPE=$(echo "${SERVER_TYPE:-vanilla}" | tr '[:upper:]' '[:lower:]')
 MC_VERSION="${MINECRAFT_VERSION:-latest}"
 BUILD_NUMBER="${BUILD_NUMBER:-latest}"
@@ -275,7 +260,7 @@ archive_previous_instance() {
     for f in "${SERVER_DIR}"/*; do
         base=$(basename "${f}")
         case "${base}" in
-            archive|.mc-instance.conf|.multi-mc.conf|.gitkeep|.potenfyr|.logs|install-error.log|install-error.log.old) continue ;;
+            archive|.mc-instance.conf|.multi-mc.conf|.gitkeep|.potenfyr|.logs|install-error.log|install-error.log.old|eula.txt|run.custom.sh) continue ;;
         esac
         if mv -f -- "${f}" "${dest}/" 2>/dev/null; then
             count=$((count + 1))
@@ -801,27 +786,47 @@ install_neoforge() {
 }
 
 install_fabric() {
-    local mc="${MC_VERSION}" installer_url loader_args=""
+    local mc="${MC_VERSION}" installer_url loader_args="" game_jar="fabric-server-mc.jar"
     log "Installing Fabric (${MC_VERSION}${LOADER_VERSION:+ loader ${LOADER_VERSION}})"
     installer_url=$(curl -fsSL -A "${USER_AGENT}" https://meta.fabricmc.net/v2/versions/installer | jq -r '.[0].url')
-    [ -z "${installer_url}" ] && fail "Cannot resolve the Fabric installer"
+    if [ -z "${installer_url}" ] || [ "${installer_url}" = "null" ]; then
+        fail "Cannot resolve the Fabric installer"
+    fi
     [ "${mc}" = "latest" ] && mc=$(mc_latest_release)
     if [ "${LOADER_VERSION}" != "latest" ]; then loader_args="-loader ${LOADER_VERSION}"; fi
     download "${installer_url}" fabric-installer.jar
     "$(java_bin_for_mc "${mc}")" -jar fabric-installer.jar server -mcversion "${mc}" ${loader_args} -downloadMinecraft \
         || fail "Fabric installer failed"
     rm -f fabric-installer.jar
-    mv -f fabric-server-launch.jar "${JARFILE}"
+    [ -f fabric-server-launch.jar ] || fail "Fabric installer did not produce fabric-server-launch.jar"
+    [ -f server.jar ] || fail "Fabric installer did not download the vanilla server jar"
+
+    # The Fabric launch jar loads the vanilla server jar named by
+    # fabric-server-launcher.properties (key: serverJar, default server.jar).
+    # NEVER rename the launch jar over server.jar: the launcher would then
+    # resolve serverJar to itself, fail to find the Minecraft classes and die
+    # with exit 1 BEFORE creating eula.txt or any world data - the exact
+    # "EULA is never created / manual eula.txt still crashes" report.
+    # Keep the vanilla jar under a dedicated name, repoint the launcher at it,
+    # then promote the launcher to the configured SERVER_JARFILE.
+    [ "${JARFILE}" = "${game_jar}" ] && game_jar="fabric-server-mc-v.jar"
+    mv -f server.jar "${game_jar}" || fail "Could not preserve the vanilla server jar as ${game_jar}"
+    printf 'serverJar=%s\n' "${game_jar}" > fabric-server-launcher.properties
+    if [ "${JARFILE}" != "fabric-server-launch.jar" ]; then
+        mv -f fabric-server-launch.jar "${JARFILE}" || fail "Could not place the Fabric launcher at ${JARFILE}"
+    fi
     RESOLVED_VERSION="${mc}"
     ensure_server_properties
-    ok "Fabric install complete"
+    ok "Fabric install complete (launcher: ${JARFILE}, game jar: ${game_jar})"
 }
 
 install_quilt() {
-    local mc="${MC_VERSION}" installer_url loader=""
+    local mc="${MC_VERSION}" installer_url loader="" game_jar="quilt-server-mc.jar"
     log "Installing Quilt (${MC_VERSION}${LOADER_VERSION:+ loader ${LOADER_VERSION}})"
     installer_url=$(curl -fsSL -A "${USER_AGENT}" https://meta.quiltmc.org/v3/versions/installer | jq -r '.[0].url')
-    [ -z "${installer_url}" ] && fail "Cannot resolve the Quilt installer"
+    if [ -z "${installer_url}" ] || [ "${installer_url}" = "null" ]; then
+        fail "Cannot resolve the Quilt installer"
+    fi
     [ "${mc}" = "latest" ] && mc=$(mc_latest_release)
     if [ "${LOADER_VERSION}" != "latest" ]; then
         loader="${LOADER_VERSION}"
@@ -832,10 +837,21 @@ install_quilt() {
     "$(java_bin_for_mc "${mc}")" -jar quilt-installer.jar install server "${mc}" "${loader}" --download-server --install-dir="${SERVER_DIR}" \
         || fail "Quilt installer failed"
     rm -f quilt-installer.jar
-    mv -f quilt-server-launch.jar "${JARFILE}"
+    [ -f quilt-server-launch.jar ] || fail "Quilt installer did not produce quilt-server-launch.jar"
+    [ -f server.jar ] || fail "Quilt installer did not download the vanilla server jar"
+
+    # Same trap as Fabric above: quilt-server-launch.jar resolves the vanilla
+    # jar through quilt-server-launcher.properties (key: serverJar). Renaming
+    # the launcher over server.jar made it load itself and crash before EULA.
+    [ "${JARFILE}" = "${game_jar}" ] && game_jar="quilt-server-mc-v.jar"
+    mv -f server.jar "${game_jar}" || fail "Could not preserve the vanilla server jar as ${game_jar}"
+    printf 'serverJar=%s\n' "${game_jar}" > quilt-server-launcher.properties
+    if [ "${JARFILE}" != "quilt-server-launch.jar" ]; then
+        mv -f quilt-server-launch.jar "${JARFILE}" || fail "Could not place the Quilt launcher at ${JARFILE}"
+    fi
     RESOLVED_VERSION="${mc}"
     ensure_server_properties
-    ok "Quilt install complete"
+    ok "Quilt install complete (launcher: ${JARFILE}, game jar: ${game_jar})"
 }
 
 install_mohist() {

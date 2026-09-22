@@ -24,6 +24,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Egg JSON installer is in sync with install.sh
+        run: python3 tests/sync-egg-install.py
+
       - name: Run panel-behavior test suite
         shell: bash
         run: |

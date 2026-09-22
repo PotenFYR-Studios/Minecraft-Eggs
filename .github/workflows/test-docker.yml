@@ -32,6 +32,13 @@ jobs:
             ready: "Done ("
             port: "25565"
             proto: tcp
+          # Mod loader: guards the launcher-vs-vanilla-jar layout (renaming
+          # fabric-server-launch.jar over server.jar used to crash before
+          # eula.txt was generated).
+          - server: fabric
+            ready: "Done ("
+            port: "25565"
+            proto: tcp
           # Bedrock ecosystem. PocketMine's RakNet is UDP; modern Bedrock
           # builds default to transport=nethernet, which binds the game port
           # on TCP (an internal UDP channel on a separate port comes with it).
