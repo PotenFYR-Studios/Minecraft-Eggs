@@ -282,7 +282,7 @@ fi
 #   * URL pointing at a run.sh -> replaces the launcher directly.
 # Failure of any step is non-fatal: the previously installed launcher runs.
 phase "Egg Self-Update"
-EGG_UPDATE_URL="${EGG_UPDATE_URL:-https://raw.githubusercontent.com/PotenFYR-Studios/Minecraft-Eggs/main/egg-minecraft-multi.json}"
+EGG_UPDATE_URL="${EGG_UPDATE_URL:-https://raw.githubusercontent.com/PotenFYR-Studios/Minecraft-Eggs/master/egg-minecraft-multi.json}"
 AUTO_UPDATE_EGG="${AUTO_UPDATE_EGG:-1}"
 
 # Persist the defaults so servers created before these variables existed get
@@ -316,7 +316,20 @@ if [ "${AUTO_UPDATE_EGG}" = "1" ] && [ -n "${EGG_UPDATE_URL}" ] && [ -f /opt/pot
         # --proto-redir '=https' keeps the https-only guarantee across redirects:
         # a URL that 3xx-redirects to plain http is refused instead of downloaded
         # in cleartext.
+        # Older egg revisions defaulted to the 'main' branch; the project moved
+        # to 'master'. Retry the canonical branch once so existing servers keep
+        # receiving self-updates instead of failing on every boot.
+        _egg_fallback="${EGG_UPDATE_URL/\/main\//\/master\/}"
+        _egg_fetched=0
         if curl -fsSL --proto '=https' --proto-redir '=https' --retry 2 --max-time 30 "${EGG_UPDATE_URL}" -o "${_egg_tmp}" 2>/dev/null && [ -s "${_egg_tmp}" ]; then
+            _egg_fetched=1
+        elif [ "${_egg_fallback}" != "${EGG_UPDATE_URL}" ] \
+            && curl -fsSL --proto '=https' --proto-redir '=https' --retry 2 --max-time 30 "${_egg_fallback}" -o "${_egg_tmp}" 2>/dev/null && [ -s "${_egg_tmp}" ]; then
+            warn "EGG_UPDATE_URL points at the retired 'main' branch; using '${_egg_fallback}'."
+            EGG_UPDATE_URL="${_egg_fallback}"
+            _egg_fetched=1
+        fi
+        if [ "${_egg_fetched}" = "1" ]; then
             _egg_hash_new="$(sha256sum "${_egg_tmp}" 2>/dev/null | cut -d' ' -f1)"
             _egg_hash_old="$(cat "${_egg_hashfile}" 2>/dev/null || cat /etc/potenfyr-egg-hash 2>/dev/null || true)"
             if [ -n "${_egg_hash_new}" ] && [ "${_egg_hash_new}" != "${_egg_hash_old}" ]; then
@@ -359,11 +372,11 @@ if [ "${AUTO_UPDATE_EGG}" = "1" ] && [ -n "${EGG_UPDATE_URL}" ] && [ -f /opt/pot
                 info "Egg is up to date."
             fi
             rm -f "${_egg_tmp}" 2>/dev/null || true
-            unset _egg_tmp _egg_hash_new _egg_hash_old _egg_target _egg_hashfile _egg_lhash _egg_base _egg_launcher_ok
+            unset _egg_tmp _egg_hash_new _egg_hash_old _egg_target _egg_hashfile _egg_lhash _egg_base _egg_launcher_ok _egg_fallback _egg_fetched
         else
-            warn "EGG_UPDATE_URL fetch failed - continuing with installed launcher."
+            warn "EGG_UPDATE_URL fetch failed (${EGG_UPDATE_URL}) - continuing with installed launcher."
             rm -f "${_egg_tmp}" 2>/dev/null || true
-            unset _egg_tmp
+            unset _egg_tmp _egg_fallback _egg_fetched
         fi
     else
         warn "EGG_UPDATE_URL must be an https:// URL - self-update disabled for safety."
@@ -480,22 +493,28 @@ detect_java_home() {
 
     # 5. Map Minecraft versions to their required Java generation:
     #   Future 27.x+     -> Java 27+
-    #   26.x / 26w*      -> Java 26
+    #   latest / 26.x    -> Java 26 (latest now tracks the 26.x line)
     #   20.x - 25.x      -> Java 25
     #   1.20.5 - 1.21.x  -> Java 21
     #   1.17 - 1.20.4    -> Java 17
     #   anything older   -> Java 8 (including Alpha, Beta, Classic, InDev, Infdev)
     case "${mc}" in
         latest | latest-snapshot)
-            v="21"
+            v="26"
             ;;
         [3-9][0-9].* | 2[7-9].*)
             v=$(echo "${mc}" | cut -d. -f1)
             ;;
-        26.* | 2[6-9]w*)
+        26.*)
             v="26"
             ;;
-        2[0-5].* | 25w*)
+        2[6-9]w* | [3-9][0-9]w*)
+            v="26"
+            ;;
+        2[0-5].*)
+            v="25"
+            ;;
+        25w*)
             v="25"
             ;;
         24w*)
