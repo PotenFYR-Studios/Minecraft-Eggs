@@ -70,9 +70,12 @@ export default function Docs() {
       <p>
         The egg declares three panel features: <InlineCode>eula</InlineCode>,{" "}
         <InlineCode>java_version</InlineCode> and <InlineCode>pid_limit</InlineCode>. Accept the
-        Minecraft <strong>EULA</strong> when the panel prompts. On fresh or missing files the
-        launcher self-heals by triggering the installer automatically, so you usually never need to
-        press Reinstall by hand.
+        Minecraft <strong>EULA</strong> when the panel prompts. If <InlineCode>eula.txt</InlineCode>{" "}
+        is missing, the launcher creates it with <InlineCode>eula=false</InlineCode> before the
+        first boot, so the file is always there to accept &mdash; set{" "}
+        <InlineCode>eula=true</InlineCode> (or accept it in the panel) and start again. On fresh or
+        missing files the launcher self-heals by triggering the installer automatically, so you
+        usually never need to press Reinstall by hand.
       </p>
 
       <h2 id="java">Java &amp; memory guidance</h2>
