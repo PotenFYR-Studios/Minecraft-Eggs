@@ -244,7 +244,19 @@ archive
 .logs
 .runtimes
 .git-sync
-.multi-mc.conf'
+.multi-mc.conf
+.mc-instance.conf
+install-error.log
+install-error.log.old
+unix_args.txt
+fabric-server-launch.jar
+fabric-server-launcher.properties
+fabric-server-mc.jar
+fabric-server-mc-v.jar
+quilt-server-launch.jar
+quilt-server-launcher.properties
+quilt-server-mc.jar
+quilt-server-mc-v.jar'
 
 _pf_sync_is_protected() { # _pf_sync_is_protected <relative-path>
     local seg="${1%%/*}" rest
@@ -671,10 +683,33 @@ auto_install_if_needed() {
         pocketmine)
             [ ! -f ./PocketMine-MP.phar ] && need_install=1
             ;;
+        fabric | quilt)
+            local _loader_props _game_jar _sj=""
+            case "${TYPE}" in
+                fabric) _loader_props="fabric-server-launcher.properties"; _game_jar="fabric-server-mc.jar" ;;
+                quilt)  _loader_props="quilt-server-launcher.properties";  _game_jar="quilt-server-mc.jar" ;;
+            esac
+            if [ ! -f "${SERVER_JARFILE:-server.jar}" ] && [ ! -f unix_args.txt ]; then
+                need_install=1
+            else
+                [ -f "${_loader_props}" ] && _sj="$(grep -E '^serverJar=' "${_loader_props}" 2>/dev/null | tail -n1 | cut -d= -f2-)"
+                # Self-heal the legacy layout where the loader launch jar was
+                # renamed over the vanilla server jar: the launcher then points
+                # serverJar at itself (or the game jar is simply gone) and the
+                # engine dies before generating eula.txt.
+                if [ -n "${_sj}" ] && { [ "${_sj}" = "${SERVER_JARFILE:-server.jar}" ] || [ ! -f "${_sj}" ]; }; then
+                    warn "${TYPE}: launcher/game-jar layout is broken (serverJar=${_sj}); repairing via installer."
+                    need_install=1
+                elif [ -z "${_sj}" ] && [ ! -f "${_game_jar}" ]; then
+                    warn "${TYPE}: game jar '${_game_jar}' is missing; repairing via installer."
+                    need_install=1
+                fi
+            fi
+            ;;
         *)
             if [ ! -f "${SERVER_JARFILE:-server.jar}" ] && [ ! -f unix_args.txt ]; then
                 local cand_jar
-                cand_jar=$(ls *.jar 2>/dev/null | grep -v 'installer' | head -n1)
+                cand_jar=$(ls *.jar 2>/dev/null | grep -vE 'installer|server-mc' | head -n1)
                 if [ -n "${cand_jar}" ]; then
                     SERVER_JARFILE="${cand_jar}"
                 else
@@ -713,6 +748,16 @@ print_crash_diagnostics() {
     local sub_divider
     sub_divider=$(printf '%*s' 62 '' | tr ' ' '-')
 
+    # Snapshot the console mirror and the server log BEFORE printing anything:
+    # stdout is mirrored straight back into .logs/console.log by the entrypoint
+    # (exec > >(tee -a ...)), so a tail taken after this report is printed would
+    # only show the report itself instead of the server's final words. That was
+    # the "last 12 console lines" recursion bug.
+    local _clog="${SERVER_DIR}/.logs/console.log" _snapshot=""
+    [ -f "${_clog}" ] && _snapshot="$(tail -n 15 "${_clog}" 2>/dev/null)"
+    local _latest=""
+    [ -f logs/latest.log ] && _latest="$(tail -n 8 logs/latest.log 2>/dev/null)"
+
     printf "\n${C_RED}${C_BOLD}%s${C_RESET}\n" "${divider}"
     printf "${C_RED}${C_BOLD}  [CRASH DETECTED] Server process terminated abnormally (Exit code: %s)${C_RESET}\n" "${code}"
     printf "${C_RED}${C_BOLD}%s${C_RESET}\n" "${divider}"
@@ -727,12 +772,17 @@ print_crash_diagnostics() {
     printf "${C_DIM}%s${C_RESET}\n" "${sub_divider}"
     printf "  ${C_GREEN}${C_BOLD}Automated Diagnostics:${C_RESET}\n"
 
-    # 1. Check EULA
-    if [ -f eula.txt ] && grep -qi "eula=false" eula.txt; then
-        printf "  ${C_YELLOW}⚠ EULA Not Accepted:${C_RESET} eula.txt contains eula=false. Accept EULA in panel or set eula=true.\n"
-    elif [ ! -f eula.txt ] && [ "${TYPE}" != "bedrock" ] && [ "${TYPE}" != "pocketmine" ] && [ "${TYPE}" != "velocity" ] && [ "${TYPE}" != "waterfall" ] && [ "${TYPE}" != "bungeecord" ]; then
-        printf "  ${C_YELLOW}⚠ EULA Missing:${C_RESET} Server exited on initial startup to generate eula.txt. Accept EULA and start again.\n"
-    fi
+    # 1. Check EULA. Bedrock engines and proxies have no Minecraft EULA.
+    case "${TYPE}" in
+        bedrock | pocketmine | nukkit | velocity | waterfall | bungeecord) ;;
+        *)
+            if [ -f eula.txt ] && grep -qi "eula=false" eula.txt; then
+                printf "  ${C_YELLOW}⚠ EULA Not Accepted:${C_RESET} eula.txt contains eula=false. Set eula=true (or accept the EULA in your panel) and restart.\n"
+            elif [ ! -f eula.txt ]; then
+                printf "  ${C_YELLOW}⚠ EULA Missing:${C_RESET} eula.txt was never created - the engine did not reach its EULA check (see output below).\n"
+            fi
+            ;;
+    esac
 
     # 2. Check Out of Memory
     if [ "${code}" -eq 137 ]; then
@@ -758,21 +808,54 @@ print_crash_diagnostics() {
         fi
     fi
 
-    # 4. Recent console output (from the .logs/console.log mirror, if present)
-    local _clog="${SERVER_DIR}/.logs/console.log"
-    if [ -f "${_clog}" ]; then
-        printf "${C_DIM}  ▼ last 12 console lines before the crash (%s):${C_RESET}\n" "${_clog}"
-        tail -n 12 "${_clog}" 2>/dev/null | sed 's/^/  | /'
+    # 4. No server log at all is itself the diagnosis (missing/corrupt jar,
+    #    wrong Java): state it instead of leaving the user guessing.
+    if [ ! -f logs/latest.log ]; then
+        printf "  ${C_RED}⚠ No server log (logs/latest.log):${C_RESET} the engine never started. The server jar may be missing/corrupt or Java incompatible.\n"
+    fi
+
+    # 5. Last lines of the server's own log (the most reliable crash cause).
+    if [ -n "${_latest}" ]; then
+        printf "${C_DIM}  ▼ last 8 lines of logs/latest.log:${C_RESET}\n"
+        printf '%s\n' "${_latest}" | sed 's/^/  | /'
+        printf "\n"
+    fi
+
+    # 6. Recent console output (snapshot taken before this report was printed).
+    if [ -n "${_snapshot}" ]; then
+        printf "${C_DIM}  ▼ last 15 console lines before the crash (%s):${C_RESET}\n" "${_clog}"
+        printf '%s\n' "${_snapshot}" | sed 's/^/  | /'
         printf "\n"
     fi
 
     printf "${C_DIM}%s${C_RESET}\n" "${sub_divider}"
     printf "  ${C_GREEN}${C_BOLD}Next Steps to Resolve:${C_RESET}\n"
-    printf "  1. Inspect full log output above for specific mod/plugin incompatibilities.\n"
+    printf "  1. Inspect the output above for the specific engine/mod error.\n"
     printf "  2. If Java version mismatch occurs, select compatible JAVA_VERSION in panel Variables.\n"
     printf "  3. Trigger 'Reinstall Server' if server files or libraries are corrupted.\n"
     printf "  4. Full launcher/crash history is saved in .logs/launcher-errors.log (panel File Manager).\n"
     printf "${C_RED}${C_BOLD}%s${C_RESET}\n\n" "${divider}"
+}
+
+# ---------------------------------------------------------------------------
+# EULA file provisioning
+# ---------------------------------------------------------------------------
+# Java game servers refuse to boot until the Minecraft EULA is accepted, and
+# vanilla/Paper/Forge spawn eula.txt themselves on first run. They only do that
+# if the engine actually starts though; a broken jar then leaves the user with
+# a "no eula.txt" message and nothing to accept. Create a eula=false file up
+# front so the file always exists and the panel/user has something to flip.
+# Proxies and Bedrock engines (including Nukkit) have no Minecraft EULA.
+ensure_eula_file() {
+    case "${TYPE}" in
+        bedrock | pocketmine | nukkit | velocity | waterfall | bungeecord) return 0 ;;
+    esac
+    [ -f eula.txt ] && return 0
+    if printf 'eula=false\n' > eula.txt 2>/dev/null; then
+        warn "Minecraft EULA not accepted yet - created eula.txt with eula=false."
+        info "Set eula=true in eula.txt (or accept the EULA in your panel) and start again."
+    fi
+    return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -850,6 +933,10 @@ sweep_stray_processes() {
     for _p in $(ps -eo pid=,ppid= 2>/dev/null | awk -v me="${_me}" '$2 == 1 && $1 != me {print $1}'); do
         [ -n "${_p}" ] && [ "${_p}" -gt 1 ] 2>/dev/null || continue
         [ "${_p}" = "${STOP_WATCHER_PID:-0}" ] && continue
+        # The Git Auto-Update watcher is a deliberately detached background
+        # loop (PPID 1). Sweeping it during a routine pre-start cleanup silently
+        # disabled git auto-updates for the whole run.
+        [ "${_p}" = "${GIT_AUTO_UPDATE_PID:-0}" ] && continue
         _name="$(ps -o comm= -p "${_p}" 2>/dev/null || echo '')"
         case "${_name}" in
             tee|stdbuf|ps|awk|sed|grep) continue ;;
@@ -1351,7 +1438,7 @@ if [ -f unix_args.txt ] && { [ "${TYPE}" = "forge" ] || [ "${TYPE}" = "neoforge"
     JAVA_CMD="java -Xms128M -Xmx${MEMORY}M ${JAVA_FLAGS} @unix_args.txt nogui ${EXTRA_ARGS}"
 else
     if [ ! -f "${SERVER_JARFILE:-server.jar}" ]; then
-        cand_jar=$(ls *.jar 2>/dev/null | grep -v 'installer' | head -n1)
+        cand_jar=$(ls *.jar 2>/dev/null | grep -vE 'installer|server-mc' | head -n1)
         if [ -n "${cand_jar}" ]; then
             warn "Configured jar '${SERVER_JARFILE:-server.jar}' not found, but found '${cand_jar}'. Launching with '${cand_jar}'."
             SERVER_JARFILE="${cand_jar}"
@@ -1379,6 +1466,7 @@ if [ -n "${instance_java}" ] && [ -x "/opt/java/${instance_java}/bin/java" ]; th
     fi
 fi
 
+ensure_eula_file
 phase "Server Launch"
 print_boot_card
 sweep_stray_processes quick

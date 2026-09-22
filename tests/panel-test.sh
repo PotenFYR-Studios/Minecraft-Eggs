@@ -169,7 +169,8 @@ crash_out=$(timeout 90 docker run --rm \
     -e CUSTOM_COMMAND="python3 -c 'import sys; print(\"about to die\"); sys.exit(2)'" "$IMG" 2>&1)
 echo "$crash_out" | grep -q "CRASH DETECTED" && ok "crash report box printed" || bad "no crash report"
 echo "$crash_out" | grep -q "launcher-errors.log" && ok "error-journal pointer shown" || bad "no journal pointer"
-echo "$crash_out" | grep -q "last 12 console lines" && ok "recent-output tail in report" || bad "no output tail"
+echo "$crash_out" | grep -qE "last [0-9]+ console lines before the crash" && ok "recent-output tail in report" || bad "no output tail"
+[ "$(echo "$crash_out" | grep -c 'Context Summary')" = "1" ] && ok "crash report does not echo its own header" || bad "recursive crash diagnostics (header repeated)"
 
 # ------------------------------------------------- T12: FEATHER PANEL DETECTION
 echo "== T12: Feather Panel detection (P_SERVER_UUID + P_SERVER_UUID_SHORT) =="
