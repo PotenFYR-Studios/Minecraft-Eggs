@@ -27,6 +27,10 @@ jobs:
       - name: Egg JSON installer is in sync with install.sh
         run: python3 tests/sync-egg-install.py
 
+      - name: Hermetic git-sync engine tests (no network)
+        shell: bash
+        run: bash tests/test-git-sync.sh
+
       - name: Run panel-behavior test suite
         shell: bash
         run: |
