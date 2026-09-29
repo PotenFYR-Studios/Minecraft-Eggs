@@ -137,6 +137,22 @@ grep -q "should-not-land" "${SERVER_DIR}/plugins/Other/other.jar" && t_fail "GIT
 grep -q "fake-jar-v4" "${SERVER_DIR}/plugins/Essentials/Essentials.jar" && t_pass "non-excluded paths still sync" || t_fail "exclusion broke normal sync"
 unset GIT_EXCLUDE
 
+echo "--- T12: GIT_SYNC_QUIET quiet poll is silent when unchanged ---"
+GIT_REPO_URL="file://${REPO}"
+out=$(GIT_SYNC_QUIET=1 sync_git_repo 2>&1)
+[ -z "${out}" ] && t_pass "unchanged poll printed nothing" || t_fail "quiet poll was noisy: ${out}"
+
+echo "--- T13: quiet poll announces the new commit with details ---"
+commit "plugins/Essentials/Essentials.jar" "fake-jar-v5" "c7 quiet update commit"
+out=$(GIT_SYNC_QUIET=1 sync_git_repo 2>&1)
+printf '%s' "${out}" | grep -qi "new commits detected" && t_pass "poll announced the new commit" || t_fail "no new-commit notice: ${out}"
+printf '%s' "${out}" | grep -q "quiet update commit" && t_pass "poll announced the commit subject" || t_fail "commit subject missing: ${out}"
+grep -q "fake-jar-v5" "${SERVER_DIR}/plugins/Essentials/Essentials.jar" && t_pass "update applied" || t_fail "update not applied"
+
+echo "--- T14: GIT_AUTO_UPDATE=0 is a silent no-op (poller optional, off) ---"
+out=$(GIT_AUTO_UPDATE=0 GIT_REPO_URL="file://${REPO}" start_git_update_watcher 2>&1)
+[ -z "${out}" ] && t_pass "auto-update off started nothing and stayed silent" || t_fail "auto-update off was noisy: ${out}"
+
 rm -rf "${SANDBOX}"
 echo
 echo "Results: $PASS passed, $FAIL failed"

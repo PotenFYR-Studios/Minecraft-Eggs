@@ -96,6 +96,8 @@ runs native, PocketMine runs PHP 8.x), downloading missing runtimes on demand, w
 | `GIT_REPO_URL` / `GIT_BRANCH` | *(empty)* | Sync plugins/mods/configs from a git repo at boot and on the auto-update poll |
 | `GIT_PRESERVE_ENV` | `1` | Every existing `.env` is restored to its original location after each sync - repo updates can never clobber live credentials (`0` = repo wins) |
 | `GIT_EXCLUDE` | *(empty)* | Glob patterns git sync must never install or overwrite (e.g. `plugins/keep/*`) |
+| `GIT_AUTO_UPDATE` | `1` | Poll for new commits while the server runs; each synced commit is announced in the console (sha + subject + author) (`0` = boot-time sync only) |
+| `GIT_POLL_SECONDS` | `300` | Poll interval in seconds for `GIT_AUTO_UPDATE` (30-86400) |
 
 Full reference with defaults, validation rules and access levels:
 [Egg Catalog](https://minecraft-eggs.docs.potenfyr.in/docs/eggs/) · ready-made setups:
