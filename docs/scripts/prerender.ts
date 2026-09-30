@@ -12,13 +12,14 @@ import { StrictMode, createElement } from "react";
 import { renderToString } from "react-dom/server";
 import App from "../src/App";
 import type { ReactElement } from "react";
+import { fileURLToPath } from "node:url";
 
 /** StrictMode-wrapped app, matching the client entry in src/main.tsx. */
 function appElement(): ReactElement {
   return createElement(StrictMode, null, createElement(App));
 }
 
-const DIST = decodeURIComponent(new URL("../dist", import.meta.url).pathname);
+const DIST = fileURLToPath(new URL("../dist", import.meta.url));
 
 // Every emitted page with its file twins, plus the 404 fallback (rendered at
 // an unknown path; pageFromPath() falls back to "home", exactly what the
