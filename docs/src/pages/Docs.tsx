@@ -72,7 +72,7 @@ export default function Docs() {
         <InlineCode>java_version</InlineCode> and <InlineCode>pid_limit</InlineCode>. Accept the
         Minecraft <strong>EULA</strong> when the panel prompts. If <InlineCode>eula.txt</InlineCode>{" "}
         is missing, the launcher creates it with <InlineCode>eula=false</InlineCode> before the
-        first boot, so the file is always there to accept &mdash; set{" "}
+        first boot, so the file is always there to accept: set{" "}
         <InlineCode>eula=true</InlineCode> (or accept it in the panel) and start again. On fresh or
         missing files the launcher self-heals by triggering the installer automatically, so you
         usually never need to press Reinstall by hand.
