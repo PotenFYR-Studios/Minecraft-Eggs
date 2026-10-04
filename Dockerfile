@@ -49,6 +49,7 @@ RUN apt-get update \
         curl \
         wget \
         jq \
+        gosu \
         unzip \
         xz-utils \
         tzdata \
@@ -105,7 +106,10 @@ RUN rm -f /tmp/ptero-arch \
     && chmod -R a+rX /opt/java
 
 # Create container user (required by Pterodactyl, Wings, Pelican, Feather Panel)
-RUN useradd -d /home/container -m -s /bin/bash container \
+# uid/gid 988: matches the org-wide convention (Database-Eggs, Prog-Language-Eggs)
+# so root-bootstrapped panels can chown the volume and drop to a known uid.
+RUN groupadd -g 988 container 2>/dev/null || true \
+    && useradd -d /home/container -m -u 988 -g 988 -s /bin/bash container 2>/dev/null || true \
     && mkdir -p /home/container \
     && chown -R container:container /home/container \
     && chmod -R 777 /home/container

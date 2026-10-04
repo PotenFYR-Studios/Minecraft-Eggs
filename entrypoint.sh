@@ -55,6 +55,25 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+# If a panel overrides the image USER and starts the container as root,
+# switch back to the image's dedicated runtime account before touching the
+# server volume: fix ownership while still root, then drop privileges via
+# gosu and re-exec this entrypoint. Root-owned volume files would otherwise
+# break the panel file manager, self-updates, and later non-root starts.
+if [ "$(id -u 2>/dev/null || echo 1)" = "0" ]; then
+    _MC_BOOT_UID="${RUNTIME_UID:-988}"
+    _MC_BOOT_GID="${RUNTIME_GID:-988}"
+
+    for _vol in /home/container /mnt/server; do
+        [ -d "${_vol}" ] && chown -R "${_MC_BOOT_UID}:${_MC_BOOT_GID}" "${_vol}" 2>/dev/null || true
+    done
+    unset _vol
+
+    if command -v gosu >/dev/null 2>&1 && getent passwd "${_MC_BOOT_UID}" >/dev/null 2>&1; then
+        exec gosu "${_MC_BOOT_UID}:${_MC_BOOT_GID}" /entrypoint.sh "$@"
+    fi
+fi
+
 # --- Security baseline ----------------------------------------------------------
 # Files created by the entrypoint are group/other-readable but not writable;
 # core dumps are disabled so crashes cannot eat server disk space.
@@ -253,9 +272,10 @@ if [ "${LAUNCHER_LOG:-1}" = "1" ]; then
 fi
 unset LAUNCH_CONSOLE_LOG
 
-# Running as root inside a panel container is a security anti-pattern; warn.
+# Running as root here means the root-bootstrap above could not drop
+# privileges (no gosu / no runtime account) - genuinely unsupported.
 if [ "$(id -u 2>/dev/null || echo 1)" = "0" ]; then
-    warn "Container is running as ROOT. Panels should launch images as a non-root user (e.g. uid 988)."
+    warn "Container is running as ROOT and could not drop privileges. Panels should launch images as a non-root user (e.g. uid 988)."
 fi
 
 # Image provenance stamp (written at docker build time) for supportability.
