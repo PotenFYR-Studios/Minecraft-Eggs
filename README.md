@@ -7,7 +7,7 @@
 [![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=20&pause=1200&color=8B5CF6&center=true&vCenter=true&width=800&lines=One+universal+egg+for+every+Minecraft+server;Pterodactyl+%C2%B7+Pelican+%C2%B7+Feather+Panel;19+engines+%C2%B7+Alpha+to+26.x;Automatic+Java+%C2%B7+safe+switching)](https://github.com/PotenFYR-Studios/Minecraft-Eggs)
 
 <p align="center">
-  <a href="https://minecraft-eggs.docs.potenfyr.in"><img src="https://img.shields.io/badge/Docs-minecraft--eggs.docs.potenfyr.in-10b981?style=for-the-badge&logo=gitbook&logoColor=white&labelColor=1c1e26" alt="Docs" /></a>
+  <a href="https:/docs.potenfyr.in/Minecraft-Eggs"><img src="https://img.shields.io/badge/https:/docs.potenfyr.in/Minecraft-Eggs-10b981?style=for-the-badge&logo=gitbook&logoColor=white&labelColor=1c1e26" alt="Docs" /></a>
   <a href="https://potenfyr.in"><img src="https://img.shields.io/badge/Website-potenfyr.in-8b5cf6?style=for-the-badge&logo=googlechrome&logoColor=white&labelColor=1c1e26" alt="Website" /></a>
   <a href="https://discord.com/invite/zUaN2FPBec"><img src="https://img.shields.io/badge/Discord-Join%20us-5865F2?style=for-the-badge&logo=discord&logoColor=white&labelColor=1c1e26" alt="Discord" /></a>
   <a href="https://modrinth.com/organization/potenfyr"><img src="https://img.shields.io/badge/Modrinth-potenfyr-1bd96a?style=for-the-badge&logo=modrinth&logoColor=white&labelColor=1c1e26" alt="Modrinth" /></a>
@@ -58,7 +58,7 @@ so you can switch any server between engines without swapping eggs or rebuilding
 | **Custom** | `github` (any GitHub release) `custom` (bring your own jar/script) |
 
 Full per-engine matrix (versions, default ports, runtimes, minimum settings) lives on the
-[Server Types docs page](https://minecraft-eggs.docs.potenfyr.in/docs/server-types/).
+[Server Types docs page](https:/docs.potenfyr.in/Minecraft-Eggs/server-types/).
 
 ## 🚀 Quick Start
 
@@ -100,12 +100,12 @@ runs native, PocketMine runs PHP 8.x), downloading missing runtimes on demand, w
 | `GIT_POLL_SECONDS` | `300` | Poll interval in seconds for `GIT_AUTO_UPDATE` (30-86400) |
 
 Full reference with defaults, validation rules and access levels:
-[Egg Catalog](https://minecraft-eggs.docs.potenfyr.in/docs/eggs/) · ready-made setups:
-[Examples](https://minecraft-eggs.docs.potenfyr.in/examples/).
+[Egg Catalog](https:/docs.potenfyr.in/Minecraft-Eggs/eggs/) · ready-made setups:
+[Examples](https:/docs.potenfyr.in/Minecraft-Eggs/examples/).
 
 ## 📚 Docs & Catalog
 
-- 📖 **Documentation**: <https://minecraft-eggs.docs.potenfyr.in>: import guide, server types, variables, examples
+- 📖 **Documentation**: <https:/docs.potenfyr.in/Minecraft-Eggs>: import guide, server types, variables, examples
 - 🪺 **Unified egg catalog**: <https://nest.potenfyr.in>: every PotenFYR egg collection in one nest
 - 🥚 **Egg file**: [`egg-minecraft-multi.json`](egg-minecraft-multi.json) (PTDL_v2, self-updating)
 - 🐳 **Docker image**: [`ghcr.io/potenfyr-studios/minecraft-eggs`](https://github.com/PotenFYR-Studios/Minecraft-Eggs/pkgs/container/minecraft-eggs)

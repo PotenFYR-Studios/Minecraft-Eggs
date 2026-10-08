@@ -6,7 +6,7 @@ contributions look like and how to validate them.
 ## Ways to contribute
 
 - **Egg improvements**: new engine support, better defaults, installer/launcher fixes
-- **Documentation**: anything on [minecraft-eggs.docs.potenfyr.in](https://minecraft-eggs.docs.potenfyr.in) lives in `docs/`
+- **Documentation**: anything on [https:/docs.potenfyr.in/Minecraft-Eggs](https:/docs.potenfyr.in/Minecraft-Eggs) lives in `docs/`
 - **Testing**: extend the Docker-based panel behavior suite in `tests/`
 - **Bug triage**: reproduce reported issues and confirm engine/version behavior
 
