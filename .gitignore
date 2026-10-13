@@ -53,3 +53,6 @@ docs/dist/
 docs/node_modules/
 docs/tsconfig.tsbuildinfo
 docs/src/generated/catalog.json
+
+# Launcher scratch space (swept on every boot)
+.scratch/

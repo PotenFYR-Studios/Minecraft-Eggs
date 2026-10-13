@@ -45,6 +45,127 @@ else
 fi
 SERVER_DIR="$(pwd)"
 
+# --- Startup variable rules (shared with run.sh / entrypoint.sh) -------------
+# The panel stores what the user typed. Booleans are checked by the egg against
+# "boolean" (which also allows true/false/yes/no), enums and numbers are not
+# checked at all. Every value is normalized here, once, so the rest of the
+# launcher only ever compares against 1/0 and known enum words. An invalid
+# value is never silently treated as "off": it is reported and the documented
+# default is used instead.
+_pf_lc() {
+    printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]'
+}
+_pf_bad() {
+    printf '[PotenFYR][!] %s\n' "$*" >&2
+}
+
+normalize_flag() { # normalize_flag NAME DEFAULT   (DEFAULT is 1 or 0)
+    local v
+    eval "v=\${$1-}"
+    v="$(_pf_lc "${v}")"
+    case "${v}" in
+        1|true|yes|on|enabled)   v=1 ;;
+        0|false|no|off|disabled) v=0 ;;
+        "")                      v="$2" ;;
+        *) _pf_bad "$1='${v}' is not a boolean (use 1 or 0) - using $2."; v="$2" ;;
+    esac
+    export "$1=${v}"
+}
+
+normalize_enum() { # normalize_enum NAME DEFAULT ALLOWED...
+    local name="$1" def="$2" v a
+    shift 2
+    eval "v=\${${name}-}"
+    v="$(_pf_lc "${v}")"
+    [ -n "${v}" ] || { export "${name}=${def}"; return 0; }
+    for a in "$@"; do
+        [ "${v}" = "${a}" ] && { export "${name}=${v}"; return 0; }
+    done
+    _pf_bad "${name}='${v}' is not one of: $* - using ${def}."
+    export "${name}=${def}"
+}
+
+normalize_int() { # normalize_int NAME DEFAULT MIN MAX
+    local name="$1" def="$2" min="$3" max="$4" v
+    eval "v=\${${name}-}"
+    v="$(_pf_lc "${v}")"
+    case "${v}" in
+        "") v="${def}" ;;
+        *[!0-9]*) _pf_bad "${name}='${v}' is not a number - using ${def}."; v="${def}" ;;
+        *)
+            if [ $((10#${v})) -lt "${min}" ] || [ $((10#${v})) -gt "${max}" ]; then
+                _pf_bad "${name}=${v} is outside ${min}-${max} - using ${def}."
+                v="${def}"
+            else
+                v=$((10#${v}))
+            fi
+            ;;
+    esac
+    export "${name}=${v}"
+}
+
+
+normalize_truefalse() { # normalize_truefalse NAME DEFAULT(true|false)
+    local v
+    eval "v=\${$1-}"
+    v="$(_pf_lc "${v}")"
+    case "${v}" in
+        1|true|yes|on)   v=true ;;
+        0|false|no|off)  v=false ;;
+        "")              v="$2" ;;
+        *) _pf_bad "$1='${v}' is not true or false - using $2."; v="$2" ;;
+    esac
+    export "$1=${v}"
+}
+
+# Scratch space lives in the server directory, never /tmp. Leftovers from killed
+# runs are swept at the next boot (see entrypoint.sh).
+_pf_scratch_dir() {
+    local d="${POTENFYR_SCRATCH:-${SERVER_DIR:-$PWD}/.scratch}"
+    mkdir -p "$d" 2>/dev/null || true
+    printf '%s' "$d"
+}
+
+_pf_prune_archives() { # keep the 5 newest git-sync snapshots
+    local adir="${SERVER_DIR:-$PWD}/archive/git-sync" f
+    [ -d "${adir}" ] || return 0
+    ls -1t "${adir}"/files-*.tar.gz 2>/dev/null | tail -n +6 \
+        | while IFS= read -r f; do rm -f "${f}" 2>/dev/null || true; done
+    return 0
+}
+normalize_settings() {
+    local pair
+    for pair in DEBUG:0 AUTO_UPDATE:1 KEEP_BACKUP:0 SHOW_VERSIONS:0 GIT_ARCHIVE_ON_UPDATE:1 \
+                GIT_PRESERVE_ENV:1 GIT_AUTO_UPDATE:1 AUTO_UPDATE_EGG:1; do
+        normalize_flag "${pair%%:*}" "${pair#*:}"
+    done
+    # server.properties takes these literally, so only true/false may reach it
+    normalize_truefalse ONLINE_MODE true
+    normalize_truefalse PVP true
+    normalize_enum SERVER_TYPE vanilla vanilla paper spigot purpur folia forge neoforge fabric quilt mohist magma bungeecord velocity waterfall bedrock nukkit pocketmine github custom
+    normalize_enum GC_TYPE auto auto g1gc zgc parallel
+    normalize_enum JAVA_VERSION "" "" 8 11 17 21 25 26
+    normalize_enum DIFFICULTY "" "" peaceful easy normal hard
+    normalize_enum GAMEMODE "" "" survival creative adventure spectator
+    normalize_enum CLI_THEME prog prog classic
+    normalize_enum PANEL_STOP_WATCHER auto auto 0 1 false true off on no yes disabled enabled
+    normalize_enum CLI_BANNER_GRADIENT auto auto aurora candy citrus forest sunset ocean none
+    normalize_int MAX_PLAYERS 20 1 2000
+    normalize_int VIEW_DISTANCE 10 3 64
+    normalize_int GIT_POLL_SECONDS 300 30 86400
+    normalize_int STOP_GRACE_SECONDS 20 5 20
+}
+
+# Scratch files live in the server directory, never /tmp. This install gets its
+# own directory, removed on exit (success, failure or signal); a killed install
+# leaves it for the entrypoint to sweep at the next boot.
+export POTENFYR_SCRATCH="${SERVER_DIR}/.scratch"
+mkdir -p "${POTENFYR_SCRATCH}" 2>/dev/null || true
+TMP_RUN="$(mktemp -d -p "${POTENFYR_SCRATCH}" install.XXXXXX 2>/dev/null || echo "${POTENFYR_SCRATCH}/install.$$")"
+mkdir -p "${TMP_RUN}" 2>/dev/null || true
+trap 'rm -rf "${TMP_RUN}"' EXIT
+normalize_settings
+
 # Ensure core utilities are available in minimal/custom installer images
 if ! command -v curl >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1 || ! command -v unzip >/dev/null 2>&1 || ! command -v tar >/dev/null 2>&1; then
     if command -v apt-get >/dev/null 2>&1; then
@@ -492,12 +613,12 @@ install_extra_urls() {
 install_world() {
     [ -n "${WORLD_URL}" ] || return 0
     log "Downloading world from ${WORLD_URL}"
-    if ! curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" -o /tmp/world.zip "${WORLD_URL}"; then
+    if ! curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" -o ${TMP_RUN}/world.zip "${WORLD_URL}"; then
         warn "Failed to download world archive"
         return 0
     fi
     mkdir -p world
-    if unzip -o /tmp/world.zip -d world > /dev/null 2>&1; then
+    if unzip -o ${TMP_RUN}/world.zip -d world > /dev/null 2>&1; then
         local sub topfiles
         sub=$(find world -mindepth 1 -maxdepth 1 -type d | head -n1)
         topfiles=$(find world -mindepth 1 -maxdepth 1 -type f | wc -l)
@@ -511,7 +632,7 @@ install_world() {
     else
         warn "World archive could not be extracted (is it a valid zip?)"
     fi
-    rm -f /tmp/world.zip
+    rm -f ${TMP_RUN}/world.zip
 }
 
 ensure_config_yml() {
@@ -680,23 +801,23 @@ install_spigot() {
         *) fail "Unsupported architecture for BuildTools" ;;
     esac
     log "Downloading temporary JDK ${jv} for the build..."
-    curl -fsSL -A "${USER_AGENT}" "https://api.adoptium.net/v3/binary/latest/${jv}/ga/linux/${jdk_arch}/jdk/hotspot/normal/eclipse" -o /tmp/jdk.tar.gz \
+    curl -fsSL -A "${USER_AGENT}" "https://api.adoptium.net/v3/binary/latest/${jv}/ga/linux/${jdk_arch}/jdk/hotspot/normal/eclipse" -o ${TMP_RUN}/jdk.tar.gz \
         || fail "Failed to download JDK ${jv}"
-    mkdir -p /tmp/jdk && tar -xzf /tmp/jdk.tar.gz -C /tmp/jdk --strip-components=1 && rm -f /tmp/jdk.tar.gz
-    mkdir -p /tmp/buildtools && cd /tmp/buildtools || exit 1
+    mkdir -p ${TMP_RUN}/jdk && tar -xzf ${TMP_RUN}/jdk.tar.gz -C ${TMP_RUN}/jdk --strip-components=1 && rm -f ${TMP_RUN}/jdk.tar.gz
+    mkdir -p ${TMP_RUN}/buildtools && cd ${TMP_RUN}/buildtools || exit 1
     download "https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar" BuildTools.jar
     mem=${SERVER_MEMORY:-1024}
     [ "${mem}" -lt 1024 ] 2>/dev/null && mem=1024
     if [ "${ver}" = "latest" ]; then
-        /tmp/jdk/bin/java -Xms512M -Xmx${mem}M -jar BuildTools.jar || fail "BuildTools failed (is ${ver} a valid version / is the memory allocation sufficient?)"
+        ${TMP_RUN}/jdk/bin/java -Xms512M -Xmx${mem}M -jar BuildTools.jar || fail "BuildTools failed (is ${ver} a valid version / is the memory allocation sufficient?)"
     else
-        /tmp/jdk/bin/java -Xms512M -Xmx${mem}M -jar BuildTools.jar --rev "${ver}" || fail "BuildTools failed (is ${ver} a valid version / is the memory allocation sufficient?)"
+        ${TMP_RUN}/jdk/bin/java -Xms512M -Xmx${mem}M -jar BuildTools.jar --rev "${ver}" || fail "BuildTools failed (is ${ver} a valid version / is the memory allocation sufficient?)"
     fi
     built=$(ls spigot-*.jar 2>/dev/null | grep -v BuildTools | head -n1)
     [ -z "${built}" ] && fail "BuildTools finished but no Spigot jar was produced"
     mv "${built}" "${SERVER_DIR}/${JARFILE}"
     cd "${SERVER_DIR}" || exit 1
-    rm -rf /tmp/buildtools /tmp/jdk
+    rm -rf ${TMP_RUN}/buildtools ${TMP_RUN}/jdk
     ok "Spigot build complete"
 }
 
@@ -1265,9 +1386,9 @@ run_install() {
                 log "Downloading custom server files from DL_URL"
                 case "${DL_URL}" in
                     *.zip)
-                        curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" -o /tmp/custom.zip "${DL_URL}" || fail "Failed to download custom zip"
-                        unzip -o /tmp/custom.zip -d "${SERVER_DIR}" > /dev/null 2>&1
-                        rm -f /tmp/custom.zip
+                        curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" -o ${TMP_RUN}/custom.zip "${DL_URL}" || fail "Failed to download custom zip"
+                        unzip -o ${TMP_RUN}/custom.zip -d "${SERVER_DIR}" > /dev/null 2>&1
+                        rm -f ${TMP_RUN}/custom.zip
                         local jar
                         jar=$(ls *.jar 2>/dev/null | grep -v "${JARFILE}" | head -n1)
                         if [ -n "${jar}" ] && [ ! -f "${JARFILE}" ]; then
@@ -1276,9 +1397,9 @@ run_install() {
                         log "Extracted custom zip archive"
                         ;;
                     *.tar.gz | *.tgz)
-                        curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" -o /tmp/custom.tar.gz "${DL_URL}" || fail "Failed to download custom tar.gz"
-                        tar -xzf /tmp/custom.tar.gz -C "${SERVER_DIR}" > /dev/null 2>&1
-                        rm -f /tmp/custom.tar.gz
+                        curl -fsSL --retry 3 --connect-timeout 20 -A "${USER_AGENT}" -o ${TMP_RUN}/custom.tar.gz "${DL_URL}" || fail "Failed to download custom tar.gz"
+                        tar -xzf ${TMP_RUN}/custom.tar.gz -C "${SERVER_DIR}" > /dev/null 2>&1
+                        rm -f ${TMP_RUN}/custom.tar.gz
                         local jar
                         jar=$(ls *.jar 2>/dev/null | grep -v "${JARFILE}" | head -n1)
                         if [ -n "${jar}" ] && [ ! -f "${JARFILE}" ]; then
@@ -1300,7 +1421,7 @@ run_install() {
     # Ensure a server.properties exists for Java servers so the panel can
     # configure the port automatically (proxies/BDS generate their own files).
     case "${PROJECT_TYPE}" in
-        paper|folia|purpur|spigot|forge|neoforge|fabric|quilt|mohist|magma|nukkit|github|custom)
+        vanilla|paper|folia|purpur|spigot|forge|neoforge|fabric|quilt|mohist|magma|nukkit|github|custom)
             ensure_server_properties ;;
     esac
 

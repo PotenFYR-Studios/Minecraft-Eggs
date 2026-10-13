@@ -76,7 +76,9 @@ fi
 
 echo "Resolving and installing Java runtime '${TARGET_NAME}' (${ARCH})..."
 
-TMP_ARCHIVE="/tmp/java_dl_${TARGET_NAME}_$$"
+SCRATCH_DIR="${POTENFYR_SCRATCH:-${SERVER_DIR:-$PWD}/.scratch}"
+mkdir -p "${SCRATCH_DIR}" 2>/dev/null || true
+TMP_ARCHIVE="${SCRATCH_DIR}/java_dl_${TARGET_NAME}_$$"
 trap 'rm -f "${TMP_ARCHIVE}"' EXIT
 
 CANDIDATE_URLS=()

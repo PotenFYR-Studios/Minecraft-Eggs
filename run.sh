@@ -68,7 +68,7 @@ _egg_error_log() {
         if mkdir -p "${d}" 2>/dev/null && [ -w "${d}" ]; then
             ERROR_LOG="${d}/launcher-errors.log"
         else
-            ERROR_LOG="/tmp/potenfyr-errors.log"
+            ERROR_LOG="/dev/stderr"
         fi
         if [ -f "${ERROR_LOG}" ] && [ "$(wc -c < "${ERROR_LOG}" 2>/dev/null || echo 0)" -gt 524288 ]; then
             mv -f "${ERROR_LOG}" "${ERROR_LOG}.old" 2>/dev/null || true
@@ -101,6 +101,125 @@ else
 fi
 SERVER_DIR="$(pwd)"
 
+# --- Startup variable rules (shared with run.sh / entrypoint.sh) -------------
+# The panel stores what the user typed. Booleans are checked by the egg against
+# "boolean" (which also allows true/false/yes/no), enums and numbers are not
+# checked at all. Every value is normalized here, once, so the rest of the
+# launcher only ever compares against 1/0 and known enum words. An invalid
+# value is never silently treated as "off": it is reported and the documented
+# default is used instead.
+_pf_lc() {
+    printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]'
+}
+_pf_bad() {
+    printf '[PotenFYR][!] %s\n' "$*" >&2
+}
+
+normalize_flag() { # normalize_flag NAME DEFAULT   (DEFAULT is 1 or 0)
+    local v
+    eval "v=\${$1-}"
+    v="$(_pf_lc "${v}")"
+    case "${v}" in
+        1|true|yes|on|enabled)   v=1 ;;
+        0|false|no|off|disabled) v=0 ;;
+        "")                      v="$2" ;;
+        *) _pf_bad "$1='${v}' is not a boolean (use 1 or 0) - using $2."; v="$2" ;;
+    esac
+    export "$1=${v}"
+}
+
+normalize_enum() { # normalize_enum NAME DEFAULT ALLOWED...
+    local name="$1" def="$2" v a
+    shift 2
+    eval "v=\${${name}-}"
+    v="$(_pf_lc "${v}")"
+    [ -n "${v}" ] || { export "${name}=${def}"; return 0; }
+    for a in "$@"; do
+        [ "${v}" = "${a}" ] && { export "${name}=${v}"; return 0; }
+    done
+    _pf_bad "${name}='${v}' is not one of: $* - using ${def}."
+    export "${name}=${def}"
+}
+
+normalize_int() { # normalize_int NAME DEFAULT MIN MAX
+    local name="$1" def="$2" min="$3" max="$4" v
+    eval "v=\${${name}-}"
+    v="$(_pf_lc "${v}")"
+    case "${v}" in
+        "") v="${def}" ;;
+        *[!0-9]*) _pf_bad "${name}='${v}' is not a number - using ${def}."; v="${def}" ;;
+        *)
+            if [ $((10#${v})) -lt "${min}" ] || [ $((10#${v})) -gt "${max}" ]; then
+                _pf_bad "${name}=${v} is outside ${min}-${max} - using ${def}."
+                v="${def}"
+            else
+                v=$((10#${v}))
+            fi
+            ;;
+    esac
+    export "${name}=${v}"
+}
+
+
+normalize_truefalse() { # normalize_truefalse NAME DEFAULT(true|false)
+    local v
+    eval "v=\${$1-}"
+    v="$(_pf_lc "${v}")"
+    case "${v}" in
+        1|true|yes|on)   v=true ;;
+        0|false|no|off)  v=false ;;
+        "")              v="$2" ;;
+        *) _pf_bad "$1='${v}' is not true or false - using $2."; v="$2" ;;
+    esac
+    export "$1=${v}"
+}
+
+# Scratch space lives in the server directory, never /tmp. Leftovers from killed
+# runs are swept at the next boot (see entrypoint.sh).
+_pf_scratch_dir() {
+    local d="${POTENFYR_SCRATCH:-${SERVER_DIR:-$PWD}/.scratch}"
+    mkdir -p "$d" 2>/dev/null || true
+    printf '%s' "$d"
+}
+
+_pf_prune_archives() { # keep the 5 newest git-sync snapshots
+    local adir="${SERVER_DIR:-$PWD}/archive/git-sync" f
+    [ -d "${adir}" ] || return 0
+    ls -1t "${adir}"/files-*.tar.gz 2>/dev/null | tail -n +6 \
+        | while IFS= read -r f; do rm -f "${f}" 2>/dev/null || true; done
+    return 0
+}
+normalize_settings() {
+    local pair
+    for pair in DEBUG:0 AUTO_UPDATE:1 KEEP_BACKUP:0 SHOW_VERSIONS:0 GIT_ARCHIVE_ON_UPDATE:1 \
+                GIT_PRESERVE_ENV:1 GIT_AUTO_UPDATE:1 AUTO_UPDATE_EGG:1; do
+        normalize_flag "${pair%%:*}" "${pair#*:}"
+    done
+    # server.properties takes these literally, so only true/false may reach it
+    normalize_truefalse ONLINE_MODE true
+    normalize_truefalse PVP true
+    normalize_enum SERVER_TYPE vanilla vanilla paper spigot purpur folia forge neoforge fabric quilt mohist magma bungeecord velocity waterfall bedrock nukkit pocketmine github custom
+    normalize_enum GC_TYPE auto auto g1gc zgc parallel
+    normalize_enum JAVA_VERSION "" "" 8 11 17 21 25 26
+    normalize_enum DIFFICULTY "" "" peaceful easy normal hard
+    normalize_enum GAMEMODE "" "" survival creative adventure spectator
+    normalize_enum CLI_THEME prog prog classic
+    normalize_enum PANEL_STOP_WATCHER auto auto 0 1 false true off on no yes disabled enabled
+    normalize_enum CLI_BANNER_GRADIENT auto auto aurora candy citrus forest sunset ocean none
+    normalize_int MAX_PLAYERS 20 1 2000
+    normalize_int VIEW_DISTANCE 10 3 64
+    normalize_int GIT_POLL_SECONDS 300 30 86400
+    normalize_int STOP_GRACE_SECONDS 20 5 20
+}
+
+export POTENFYR_SCRATCH="${SERVER_DIR}/.scratch"
+if [ "${POTENFYR_SWEPT:-0}" != "1" ]; then
+    rm -rf "${POTENFYR_SCRATCH}" 2>/dev/null || true
+    export POTENFYR_SWEPT=1
+fi
+mkdir -p "${POTENFYR_SCRATCH}" 2>/dev/null || true
+normalize_settings
+
 # --- Security baseline ----------------------------------------------------------
 # No world-writable files from the launcher; no core dumps eating disk space.
 umask 022
@@ -123,7 +242,7 @@ CONF_FILE="${CONF_FILE:-${SERVER_DIR}/.multi-mc.conf}"
 
 write_conf() { # key value : upsert a KEY=VALUE line (no shell evaluation on read)
     local key="$1" value="$2" tmp
-    tmp="$(mktemp)"
+    tmp="$(mktemp -p "$(_pf_scratch_dir)")"
     if [ -f "${CONF_FILE}" ]; then
         awk -v k="${key}" -v v="${value}" \
             'BEGIN { FS = "="; OFS = "=" }
@@ -300,7 +419,7 @@ _pf_sync_snapshot_env() { # _pf_sync_snapshot_env <workspace> <backup-dir>
     rm -rf "$2" 2>/dev/null || true
     mkdir -p "$2" 2>/dev/null || return 0
     ( cd "$1" 2>/dev/null || exit 0
-      find . -type f -name .env -not -path './archive/*' -not -path './.git-sync/*' \
+      find . -type f -name .env -not -path './archive/*' -not -path './.git-sync/*' -not -path './.scratch/*' \
              -not -path './.runtimes/*' -not -path './node_modules/*' 2>/dev/null | sed 's#^\./##'
     ) 2>/dev/null | while IFS= read -r _rel; do
         [ -n "${_rel}" ] || continue
@@ -383,7 +502,7 @@ _pf_sync_auth_header() { # prints curl-style auth header when a token is set
 _pf_sync_git_env() {
     if [ -z "${GIT_CONFIG_GLOBAL:-}" ]; then
         local _cfg
-        _cfg="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-gitconfig.$$")"
+        _cfg="$(mktemp -p "$(_pf_scratch_dir)" 2>/dev/null || echo "$(_pf_scratch_dir)/potenfyr-gitconfig.$$")"
         {
             [ -f "${HOME}/.gitconfig" ] && cat "${HOME}/.gitconfig" 2>/dev/null
             printf '[safe]\n\tdirectory = *\n'
@@ -534,7 +653,7 @@ _pf_sync_quiet() {
 
 _pf_sync_tarball() { # _pf_sync_tarball <url> <kind> <branch> <dest-dir>
     local url="$1" kind="$2" branch="$3" dest="$4" tmp turl
-    tmp=$(mktemp 2>/dev/null) || return 1
+    tmp=$(mktemp -p "$(_pf_scratch_dir)" 2>/dev/null) || return 1
     case "${kind}" in
         github)
             local repo_path="${url#https://github.com/}"
@@ -560,6 +679,7 @@ _pf_sync_tarball() { # _pf_sync_tarball <url> <kind> <branch> <dest-dir>
 
 sync_git_repo() {
     [ -n "${GIT_REPO_URL:-}" ] || return 0
+    _pf_prune_archives
 
     local url kind branch
     { read -r url kind <<< "$(_pf_sync_normalize_url "${GIT_REPO_URL}")"; } || return 0
@@ -646,7 +766,7 @@ sync_git_repo() {
 
     # --- Download fresh tree into a staging dir ------------------------------
     local stage
-    stage=$(mktemp -d 2>/dev/null) || { warn "Git sync: mktemp failed - keeping current files."; return 1; }
+    stage=$(mktemp -d -p "$(_pf_scratch_dir)" 2>/dev/null) || { warn "Git sync: mktemp failed - keeping current files."; return 1; }
     local dl_ok=0
     if command -v git >/dev/null 2>&1; then
         _pf_sync_git_env
@@ -978,7 +1098,7 @@ ensure_eula_file() {
 SERVER_PID=""
 TRANSLATOR_PID=""
 STOP_WATCHER_PID=0
-FIFO_PATH="/tmp/mc-stdin.fifo"
+FIFO_PATH="$(_pf_scratch_dir)/mc-stdin.fifo"
 EXIT_STATUS=0
 SHUTDOWN_INITIATED=0
 
@@ -1265,26 +1385,34 @@ launch_with_fifo() {
 
     # Wait for server. Grace-period timers only start counting once a
     # shutdown has been initiated (stop command / signal), never at startup.
-    # 10s grace (console stop / signals), then SIGTERM, then force-kill 10s
-    # later plus an orphan sweep - the whole sequence finishes inside the
-    # ~30s window panels give before they force-kill the container.
+    # STOP_GRACE_SECONDS (default 20, max 20) lets the console stop finish a
+    # world save, then SIGTERM (the JVM shutdown hooks save too), then a force
+    # kill 5s later. The whole sequence stays inside the ~30s window panels
+    # give before they force-kill the container, and a slow save is no longer
+    # cut off at 10-20s. Progress is logged every 5s so a long save is visible.
     # `sleep 1 &` + wait: the background sleep is killable, so a signal that
     # arrives mid-loop isn't delayed by a blocked foreground sleep.
     local grace_count=0
-    local grace_max="${STOP_GRACE_SECONDS:-10}"
+    local grace_max="${STOP_GRACE_SECONDS:-20}"
     while kill -0 "${SERVER_PID}" 2>/dev/null; do
         sleep 1 &
         local sleep_pid=$!
         wait "${sleep_pid}" 2>/dev/null
         if [ "${SHUTDOWN_INITIATED}" -eq 1 ]; then
             grace_count=$((grace_count + 1))
+            if [ $((grace_count % 5)) -eq 0 ] && [ "${grace_count}" -lt "${grace_max}" ]; then
+                log "Waiting for the server to save and exit (${grace_count}s of ${grace_max}s)..."
+            fi
             if [ "${grace_count}" -eq "${grace_max}" ]; then
                 log "Server not responding to stop request after ${grace_max}s, sending SIGTERM..."
                 kill -TERM "${SERVER_PID}" 2>/dev/null || true
             fi
-            if [ "${grace_count}" -ge $((grace_max + 10)) ]; then
+            if [ "${grace_count}" -ge $((grace_max + 5)) ]; then
+                # SIGTERM was already sent at the end of the grace period, so
+                # escalate straight to SIGKILL (timeout 0) instead of waiting
+                # another 5s for a server that is already not responding.
                 warn "Server still running, force killing..."
-                terminate_process_tree "${SERVER_PID}" 5
+                terminate_process_tree "${SERVER_PID}" 0
                 break
             fi
         fi

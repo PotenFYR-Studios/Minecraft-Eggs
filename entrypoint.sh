@@ -89,6 +89,125 @@ fi
 SERVER_DIR="$(pwd)"
 export SERVER_DIR
 
+# --- Startup variable rules (shared with run.sh / entrypoint.sh) -------------
+# The panel stores what the user typed. Booleans are checked by the egg against
+# "boolean" (which also allows true/false/yes/no), enums and numbers are not
+# checked at all. Every value is normalized here, once, so the rest of the
+# launcher only ever compares against 1/0 and known enum words. An invalid
+# value is never silently treated as "off": it is reported and the documented
+# default is used instead.
+_pf_lc() {
+    printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]'
+}
+_pf_bad() {
+    printf '[PotenFYR][!] %s\n' "$*" >&2
+}
+
+normalize_flag() { # normalize_flag NAME DEFAULT   (DEFAULT is 1 or 0)
+    local v
+    eval "v=\${$1-}"
+    v="$(_pf_lc "${v}")"
+    case "${v}" in
+        1|true|yes|on|enabled)   v=1 ;;
+        0|false|no|off|disabled) v=0 ;;
+        "")                      v="$2" ;;
+        *) _pf_bad "$1='${v}' is not a boolean (use 1 or 0) - using $2."; v="$2" ;;
+    esac
+    export "$1=${v}"
+}
+
+normalize_enum() { # normalize_enum NAME DEFAULT ALLOWED...
+    local name="$1" def="$2" v a
+    shift 2
+    eval "v=\${${name}-}"
+    v="$(_pf_lc "${v}")"
+    [ -n "${v}" ] || { export "${name}=${def}"; return 0; }
+    for a in "$@"; do
+        [ "${v}" = "${a}" ] && { export "${name}=${v}"; return 0; }
+    done
+    _pf_bad "${name}='${v}' is not one of: $* - using ${def}."
+    export "${name}=${def}"
+}
+
+normalize_int() { # normalize_int NAME DEFAULT MIN MAX
+    local name="$1" def="$2" min="$3" max="$4" v
+    eval "v=\${${name}-}"
+    v="$(_pf_lc "${v}")"
+    case "${v}" in
+        "") v="${def}" ;;
+        *[!0-9]*) _pf_bad "${name}='${v}' is not a number - using ${def}."; v="${def}" ;;
+        *)
+            if [ $((10#${v})) -lt "${min}" ] || [ $((10#${v})) -gt "${max}" ]; then
+                _pf_bad "${name}=${v} is outside ${min}-${max} - using ${def}."
+                v="${def}"
+            else
+                v=$((10#${v}))
+            fi
+            ;;
+    esac
+    export "${name}=${v}"
+}
+
+
+normalize_truefalse() { # normalize_truefalse NAME DEFAULT(true|false)
+    local v
+    eval "v=\${$1-}"
+    v="$(_pf_lc "${v}")"
+    case "${v}" in
+        1|true|yes|on)   v=true ;;
+        0|false|no|off)  v=false ;;
+        "")              v="$2" ;;
+        *) _pf_bad "$1='${v}' is not true or false - using $2."; v="$2" ;;
+    esac
+    export "$1=${v}"
+}
+
+# Scratch space lives in the server directory, never /tmp. Leftovers from killed
+# runs are swept at the next boot (see entrypoint.sh).
+_pf_scratch_dir() {
+    local d="${POTENFYR_SCRATCH:-${SERVER_DIR:-$PWD}/.scratch}"
+    mkdir -p "$d" 2>/dev/null || true
+    printf '%s' "$d"
+}
+
+_pf_prune_archives() { # keep the 5 newest git-sync snapshots
+    local adir="${SERVER_DIR:-$PWD}/archive/git-sync" f
+    [ -d "${adir}" ] || return 0
+    ls -1t "${adir}"/files-*.tar.gz 2>/dev/null | tail -n +6 \
+        | while IFS= read -r f; do rm -f "${f}" 2>/dev/null || true; done
+    return 0
+}
+normalize_settings() {
+    local pair
+    for pair in DEBUG:0 AUTO_UPDATE:1 KEEP_BACKUP:0 SHOW_VERSIONS:0 GIT_ARCHIVE_ON_UPDATE:1 \
+                GIT_PRESERVE_ENV:1 GIT_AUTO_UPDATE:1 AUTO_UPDATE_EGG:1; do
+        normalize_flag "${pair%%:*}" "${pair#*:}"
+    done
+    # server.properties takes these literally, so only true/false may reach it
+    normalize_truefalse ONLINE_MODE true
+    normalize_truefalse PVP true
+    normalize_enum SERVER_TYPE vanilla vanilla paper spigot purpur folia forge neoforge fabric quilt mohist magma bungeecord velocity waterfall bedrock nukkit pocketmine github custom
+    normalize_enum GC_TYPE auto auto g1gc zgc parallel
+    normalize_enum JAVA_VERSION "" "" 8 11 17 21 25 26
+    normalize_enum DIFFICULTY "" "" peaceful easy normal hard
+    normalize_enum GAMEMODE "" "" survival creative adventure spectator
+    normalize_enum CLI_THEME prog prog classic
+    normalize_enum PANEL_STOP_WATCHER auto auto 0 1 false true off on no yes disabled enabled
+    normalize_enum CLI_BANNER_GRADIENT auto auto aurora candy citrus forest sunset ocean none
+    normalize_int MAX_PLAYERS 20 1 2000
+    normalize_int VIEW_DISTANCE 10 3 64
+    normalize_int GIT_POLL_SECONDS 300 30 86400
+    normalize_int STOP_GRACE_SECONDS 20 5 20
+}
+
+# Sweep scratch left by a previous boot or install that was killed before its
+# cleanup ran. Nothing is running yet, so it is safe to remove it now.
+export POTENFYR_SCRATCH="${SERVER_DIR}/.scratch"
+rm -rf "${POTENFYR_SCRATCH}" 2>/dev/null || true
+mkdir -p "${POTENFYR_SCRATCH}" 2>/dev/null || true
+export POTENFYR_SWEPT=1
+normalize_settings
+
 # --- Error journal ---------------------------------------------------------------
 # _egg_error_log(): append-only error journal (egg-level failures only) at
 # .logs/launcher-errors.log so failures can be diagnosed after the fact even
@@ -100,7 +219,7 @@ _egg_error_log() {
         if mkdir -p "${d}" 2>/dev/null && [ -w "${d}" ]; then
             ERROR_LOG="${d}/launcher-errors.log"
         else
-            ERROR_LOG="/tmp/potenfyr-errors.log"
+            ERROR_LOG="/dev/stderr"
         fi
     fi
     printf '[%s] [%s] [panel=%s] %s\n' \
@@ -332,7 +451,7 @@ if [ "${AUTO_UPDATE_EGG}" = "1" ] && [ -n "${EGG_UPDATE_URL}" ] && [ -f /opt/pot
             _egg_lhash="${SERVER_DIR}/.potenfyr/launcher-hash"
             mkdir -p "${SERVER_DIR}/.potenfyr" 2>/dev/null || true
         fi
-        _egg_tmp="$(mktemp 2>/dev/null || echo "/tmp/potenfyr-egg.$$")"
+        _egg_tmp="$(mktemp -p "$(_pf_scratch_dir)" 2>/dev/null || echo "$(_pf_scratch_dir)/potenfyr-egg.$$")"
         # --proto-redir '=https' keeps the https-only guarantee across redirects:
         # a URL that 3xx-redirects to plain http is refused instead of downloaded
         # in cleartext.
@@ -369,11 +488,11 @@ if [ "${AUTO_UPDATE_EGG}" = "1" ] && [ -n "${EGG_UPDATE_URL}" ] && [ -f /opt/pot
                         # egg JSON changed -> refresh launcher from same branch
                         _egg_base="${EGG_UPDATE_URL%/*}"
                         _egg_launcher_ok=0
-                        if curl -fsSL --proto '=https' --proto-redir '=https' --retry 2 --max-time 30 "${_egg_base}/run.sh" -o /tmp/potenfyr-run.sh 2>/dev/null && [ -s /tmp/potenfyr-run.sh ] && grep -q "Multi Minecraft" /tmp/potenfyr-run.sh 2>/dev/null; then
-                            if head -c 2 /tmp/potenfyr-run.sh | grep -q $'\r'; then
-                                sed -i 's/\r$//' /tmp/potenfyr-run.sh 2>/dev/null || true
+                        if curl -fsSL --proto '=https' --proto-redir '=https' --retry 2 --max-time 30 "${_egg_base}/run.sh" -o "${POTENFYR_SCRATCH}/potenfyr-run.sh" 2>/dev/null && [ -s "${POTENFYR_SCRATCH}/potenfyr-run.sh" ] && grep -q "Multi Minecraft" "${POTENFYR_SCRATCH}/potenfyr-run.sh" 2>/dev/null; then
+                            if head -c 2 "${POTENFYR_SCRATCH}/potenfyr-run.sh" | grep -q $'\r'; then
+                                sed -i 's/\r$//' "${POTENFYR_SCRATCH}/potenfyr-run.sh" 2>/dev/null || true
                             fi
-                            if cp /tmp/potenfyr-run.sh "${_egg_target}" 2>/dev/null; then
+                            if cp "${POTENFYR_SCRATCH}/potenfyr-run.sh" "${_egg_target}" 2>/dev/null; then
                                 chmod +x "${_egg_target}" 2>/dev/null || true
                                 sha256sum "${_egg_target}" 2>/dev/null | cut -d' ' -f1 > "${_egg_lhash}" 2>/dev/null || true
                                 _egg_launcher_ok=1
@@ -385,7 +504,7 @@ if [ "${AUTO_UPDATE_EGG}" = "1" ] && [ -n "${EGG_UPDATE_URL}" ] && [ -f /opt/pot
                         else
                             warn "Egg update detected but launcher refresh failed - continuing with installed launcher."
                         fi
-                        rm -f /tmp/potenfyr-run.sh 2>/dev/null || true
+                        rm -f "${POTENFYR_SCRATCH}/potenfyr-run.sh" 2>/dev/null || true
                         ;;
                 esac
             else

@@ -75,9 +75,12 @@ docker exec ${C1} grep -q "launch:" /home/container/.logs/launcher-errors.log 2>
 # ---------------------------------------------------------------- T2: STOP
 echo "== T2: stop from panel (SIGTERM to PID 1) =="
 t0=$(date +%s)
-docker stop -t 25 ${C1} >/dev/null
+# A server that ignores the console stop command gets STOP_GRACE_SECONDS (20s
+# default) before SIGTERM, then a 5s force-kill window: 25s in total, which must
+# finish before the daemon's own 30s kill (docker stop -t 30 here).
+docker stop -t 30 ${C1} >/dev/null
 t1=$(date +%s); elapsed=$((t1-t0))
-[ "$elapsed" -lt 20 ] && ok "graceful stop in ${elapsed}s (<20s, inside daemon force-kill window)" || bad "stop took ${elapsed}s"
+[ "$elapsed" -le 26 ] && ok "graceful stop in ${elapsed}s (<=26s, inside the 30s daemon kill window)" || bad "stop took ${elapsed}s"
 docker logs ${C1} 2>&1 | grep -q "initiating graceful shutdown" && ok "shutdown log line present" || bad "no shutdown log"
 docker logs ${C1} 2>&1 | grep -q "Server stopped gracefully" && ok "clean stop confirmation" || bad "no clean-stop confirmation"
 
